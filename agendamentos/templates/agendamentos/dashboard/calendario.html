@@ -1,0 +1,219 @@
+<!-- templates/agendamentos/dashboard/calendario.html -->
+{% extends 'agendamentos/dashboard/base.html' %}
+
+{% block dashboard_content %}
+<div class="dashboard-card">
+    <div class="dashboard-card-title">
+        Calendário de Agendamentos
+        <div class="btn-group">
+            <button class="btn btn--outline btn--sm" id="btn-month">Mês</button>
+            <button class="btn btn--outline btn--sm" id="btn-week">Semana</button>
+            <button class="btn btn--outline btn--sm" id="btn-day">Dia</button>
+        </div>
+    </div>
+    <div class="dashboard-card-body">
+        <div id="calendar"></div>
+    </div>
+</div>
+
+<!-- Modal de Detalhes do Agendamento -->
+<div id="event-modal" class="modal-container hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="event-modal-title">Detalhes do Agendamento</h3>
+            <button id="event-modal-close" class="modal-close">&times;</button>
+        </div>
+        <div id="event-modal-body" class="modal-body">
+            <div id="event-details">
+                <div class="form-group">
+                    <label class="form-label">Cliente</label>
+                    <div id="event-client" class="event-field form-control-static"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contato</label>
+                    <div id="event-contact" class="event-field form-control-static"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Serviço</label>
+                    <div id="event-service" class="event-field form-control-static"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Data e Hora</label>
+                    <div id="event-datetime" class="event-field form-control-static"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Preço</label>
+                    <div id="event-price" class="event-field form-control-static"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <select id="event-status" class="form-control">
+                        <option value="Pendente">Pendente</option>
+                        <option value="Confirmado">Confirmado</option>
+                        <option value="Concluído">Concluído</option>
+                        <option value="Cancelado">Cancelado</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Pagamento</label>
+                    <select id="event-payment" class="form-control">
+                        <option value="Pendente">Pendente</option>
+                        <option value="Pago">Pago</option>
+                        <option value="Cancelado">Cancelado</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observações</label>
+                    <textarea id="event-notes" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="event-modal-cancel" class="btn btn--outline">Cancelar</button>
+            <button id="event-modal-save" class="btn btn--primary">Salvar Alterações</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block dashboard_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const calendarEl = document.getElementById('calendar');
+        let currentEventId = null;
+        
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: ''
+            },
+            locale: 'pt-br',
+            timeZone: 'local',
+            height: 'auto', // Tornar o calendário mais responsivo
+            events: '/api/admin/agendamentos-calendario/',
+            eventClick: function(info) {
+                const event = info.event;
+                currentEventId = event.id;
+                
+                // Preencher modal com dados do evento
+                document.getElementById('event-modal-title').textContent = 'Agendamento: ' + event.extendedProps.cliente;
+                document.getElementById('event-client').textContent = event.extendedProps.cliente;
+                document.getElementById('event-contact').textContent = `${event.extendedProps.email} | ${event.extendedProps.telefone}`;
+                document.getElementById('event-service').textContent = event.extendedProps.servico;
+                
+                const start = new Date(event.start);
+                document.getElementById('event-datetime').textContent = `${start.toLocaleDateString('pt-BR')} às ${start.getHours().toString().padStart(2, '0')}:${start.getMinutes().toString().padStart(2, '0')}`;
+                
+                document.getElementById('event-price').textContent = `R$ ${event.extendedProps.preco.toFixed(2)}`;
+                document.getElementById('event-status').value = event.extendedProps.status;
+                document.getElementById('event-payment').value = event.extendedProps.status_pagamento;
+                document.getElementById('event-notes').value = event.extendedProps.observacoes;
+                
+                // Exibir modal
+                document.getElementById('event-modal').classList.remove('hidden');
+            },
+            eventTimeFormat: {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }
+        });
+        
+        calendar.render();
+        
+        // Botões de visualização
+        document.getElementById('btn-month').addEventListener('click', function() {
+            calendar.changeView('dayGridMonth');
+            highlightActiveButton(this);
+        });
+        
+        document.getElementById('btn-week').addEventListener('click', function() {
+            calendar.changeView('timeGridWeek');
+            highlightActiveButton(this);
+        });
+        
+        document.getElementById('btn-day').addEventListener('click', function() {
+            calendar.changeView('timeGridDay');
+            highlightActiveButton(this);
+        });
+        
+        function highlightActiveButton(button) {
+            document.querySelectorAll('.btn-group .btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            button.classList.add('active');
+        }
+        
+        // Controle do modal
+        document.getElementById('event-modal-close').addEventListener('click', function() {
+            document.getElementById('event-modal').classList.add('hidden');
+        });
+        
+        document.getElementById('event-modal-cancel').addEventListener('click', function() {
+            document.getElementById('event-modal').classList.add('hidden');
+        });
+        
+        document.getElementById('event-modal-save').addEventListener('click', function() {
+            if (!currentEventId) return;
+            
+            const status = document.getElementById('event-status').value;
+            const statusPagamento = document.getElementById('event-payment').value;
+            const observacoes = document.getElementById('event-notes').value;
+            
+            fetch(`/api/admin/atualizar-pagamento/${currentEventId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    status: status,
+                    status_pagamento: statusPagamento,
+                    observacoes: observacoes
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Atualizar o evento no calendário
+                    const event = calendar.getEventById(currentEventId);
+                    if (event) {
+                        // Define a cor com base no status
+                        let color = '#5CCFAC';  // Verde (confirmado e pago)
+                        
+                        if (status === 'Cancelado') {
+                            color = '#FF5A5F';  // Vermelho
+                        } else if (statusPagamento === 'Pendente') {
+                            color = '#FF9500';  // Laranja (confirmado mas não pago)
+                        } else if (status === 'Concluído') {
+                            color = '#0D99FF';  // Azul
+                        }
+                        
+                        event.setProp('color', color);
+                        event.setExtendedProp('status', status);
+                        event.setExtendedProp('status_pagamento', statusPagamento);
+                        event.setExtendedProp('observacoes', observacoes);
+                    }
+                    
+                    // Fechar modal
+                    document.getElementById('event-modal').classList.add('hidden');
+                    
+                    // Exibir mensagem de sucesso
+                    alert('Agendamento atualizado com sucesso!');
+                } else {
+                    alert('Erro ao atualizar agendamento: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao atualizar agendamento:', error);
+                alert('Erro ao atualizar agendamento. Verifique o console para mais detalhes.');
+            });
+        });
+        
+        // Marcar o botão mensal como ativo inicialmente
+        document.getElementById('btn-month').classList.add('active');
+    });
+</script>
+{% endblock %}

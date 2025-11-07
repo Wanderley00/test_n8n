@@ -1,0 +1,345 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bella Designer - Agendamento Online</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    {% csrf_token %}
+
+    <div id="home-screen" class="screen active">
+        <div class="hero-container">
+            <div class="hero-overlay"></div>
+            <div class="hero-content">
+                <div class="logo-section">
+                    <h1 class="logo">Bella Designer</h1>
+                    <p class="tagline">Espaço dedicado à beleza e bem-estar</p>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn--primary btn--lg" onclick="showScreen('warnings-screen')">
+                        Agendar Horário
+                    </button>
+                    <button class="btn btn--outline btn--lg" onclick="showScreen('client-area-screen')">
+                        Área do Cliente
+                    </button>
+                    <button class="btn btn--secondary btn--lg" onclick="showScreen('admin-screen')">
+                        Área Administrativa
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="warnings-screen" class="screen">
+        <div class="container">
+            <div class="screen-header">
+                <button class="btn-back" onclick="showScreen('home-screen')">← Voltar</button>
+                <h2>Instruções Importantes</h2>
+            </div>
+            
+            <div class="warnings-content">
+                <div class="warning-card">
+                    <div class="warning-icon">⚠️</div>
+                    <h3>Antes do seu procedimento:</h3>
+                    <ul>
+                        <li>Chegue com 10 minutos de antecedência</li>
+                        <li>Para alongamento de cílios, não use rímel 24h antes</li>
+                        <li>Para limpeza de pele, evite produtos ácidos 3 dias antes</li>
+                        <li>Traga um documento com foto</li>
+                        <li>Confirme seu agendamento até 2h antes do horário</li>
+                    </ul>
+                </div>
+                
+                <div class="warning-card">
+                    <div class="warning-icon">💰</div>
+                    <h3>Política de Cancelamento:</h3>
+                    <ul>
+                        <li>Cancelamentos com menos de 24h: taxa de 30%</li>
+                        <li>Não comparecimento: taxa de 50%</li>
+                        <li>Remarque gratuitamente até 24h antes</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="continue-section">
+                <button class="btn btn--primary btn--lg btn--full-width" onclick="showScreen('services-screen')">
+                    Li e entendi, continuar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="services-screen" class="screen">
+        <div class="container">
+            <div class="screen-header">
+                <button class="btn-back" onclick="showScreen('warnings-screen')">← Voltar</button>
+                <h2>Nossos Serviços</h2>
+            </div>
+            
+            <div class="services-grid" id="services-list">
+                </div>
+        </div>
+    </div>
+
+    <div id="calendar-screen" class="screen">
+        <div class="container">
+            <div class="screen-header">
+                <button class="btn-back" onclick="showScreen('services-screen')">← Voltar</button>
+                <h2>Escolha a Data e Hora</h2>
+            </div>
+            <div class="selected-service-info" id="selected-service-info"></div>
+            
+            <div class="calendar-container">
+                <div class="calendar-header">
+                    <button class="btn btn--outline" onclick="changeMonth(-1)">‹</button>
+                    <h3 id="current-month"></h3>
+                    <button class="btn btn--outline" onclick="changeMonth(1)">›</button>
+                </div>
+                <div class="calendar-grid" id="calendar-grid">
+                    </div>
+            </div>
+            
+            <div class="time-selection hidden" id="time-selection">
+                <h3>Horários Disponíveis:</h3>
+                <div class="time-slots" id="time-slots">
+                    </div>
+                <button class="btn btn--primary btn--lg btn--full-width" id="continue-to-login" onclick="showScreen('login-screen')" disabled>
+                    Continuar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="login-screen" class="screen">
+        <div class="container">
+            <div class="screen-header">
+                <button class="btn-back" onclick="showScreen('calendar-screen')">← Voltar</button>
+                <h2>Finalizar Agendamento</h2>
+            </div>
+            
+            <div class="login-container">
+                <div class="login-form-section">
+                    <div class="form-toggle">
+                        <button class="toggle-btn active" onclick="showLoginForm(event)">Já sou cliente</button>
+                        <button class="toggle-btn" onclick="showRegisterForm(event)">Primeiro agendamento</button>
+                    </div>
+                    
+                    <form id="login-form" class="auth-form">
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="login-email" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Senha</label>
+                            <input type="password" class="form-control" id="login-password" required>
+                        </div>
+                        <button type="submit" class="btn btn--primary btn--full-width">Entrar e Agendar</button>
+                    </form>
+                    
+                    <form id="register-form" class="auth-form hidden">
+                        <div class="form-group">
+                            <label class="form-label">Nome</label>
+                            <input type="text" class="form-control" id="register-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Sobrenome</label>
+                            <input type="text" class="form-control" id="register-lastname" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Telefone (WhatsApp)</label>
+                            <input type="tel" class="form-control" id="register-phone" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="register-email" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Crie uma Senha</label>
+                            <input type="password" class="form-control" id="register-password" required>
+                        </div>
+                        <button type="submit" class="btn btn--primary btn--full-width">Cadastrar e Agendar</button>
+                    </form>
+                </div>
+                
+                <div class="booking-summary">
+                    <h3>Resumo do Agendamento</h3>
+                    <div class="summary-item">
+                        <span class="label">Serviço:</span>
+                        <span class="value" id="summary-service"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Data:</span>
+                        <span class="value" id="summary-date"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Horário:</span>
+                        <span class="value" id="summary-time"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Duração:</span>
+                        <span class="value" id="summary-duration"></span>
+                    </div>
+                    <div class="summary-total">
+                        <span class="label">Total:</span>
+                        <span class="value" id="summary-price"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmation-screen" class="screen">
+        <div class="container">
+            <div class="confirmation-content">
+                <div class="success-icon">✅</div>
+                <h2>Agendamento Confirmado!</h2>
+                <p>Seu horário foi agendado com sucesso. Você receberá os detalhes por email.</p>
+                
+                <div class="booking-details" id="booking-details">
+                    </div>
+                
+                <div class="confirmation-actions">
+                    <button class="btn btn--primary btn--lg" onclick="showScreen('home-screen')">Voltar ao Início</button>
+                    <button class="btn btn--outline btn--lg" onclick="showScreen('client-area-screen')">Meus Agendamentos</button>
+                    <button class="btn btn--outline btn--lg" onclick="performLogout()">Sair</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="client-area-screen" class="screen">
+        <div class="container">
+            <div class="screen-header">
+                <button class="btn-back" onclick="showScreen('home-screen')">← Voltar</button>
+                <h2>Meus Agendamentos</h2>
+            </div>
+            
+            <div class="client-dashboard">
+                <div class="dashboard-section">
+                    <div class="appointments-list" id="client-appointments">
+                        </div>
+                </div>
+                
+                <div class="dashboard-actions" style="margin-top: 24px;">
+                    <button class="btn btn--primary" onclick="showScreen('warnings-screen')">Novo Agendamento</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="forced-login-screen" class="screen">
+    <div class="container">
+        <div class="screen-header">
+        <button class="btn-back" onclick="showScreen('home-screen')">← Voltar</button>
+        <h2>Entrar na Conta</h2>
+        </div>
+
+        <div class="login-container">
+        <div class="login-form-section">
+            <div class="warning-card" style="margin-bottom: 16px;">
+            <div class="warning-icon">🔒</div>
+            <h3>Login necessário</h3>
+            <p style="color: var(--color-text-secondary);">
+                Para acessar a Área do Cliente e ver seus agendamentos, é necessário entrar na conta.
+            </p>
+            </div>
+
+            <div class="form-toggle">
+            <button class="toggle-btn active" onclick="showLoginForm(event)">Já sou cliente</button>
+            <button class="toggle-btn" onclick="showRegisterForm(event)">Primeiro agendamento</button>
+            </div>
+
+            <form id="forced-login-form">
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-control" id="forced-login-email" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Senha</label>
+                <input type="password" class="form-control" id="forced-login-password" required>
+            </div>
+            <button type="submit" class="btn btn--primary btn--full-width">Entrar</button>
+            </form>
+
+            <form id="forced-register-form" class="hidden">
+            <div class="form-group">
+                <label class="form-label">Nome</label>
+                <input type="text" class="form-control" id="forced-register-name" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Sobrenome</label>
+                <input type="text" class="form-control" id="forced-register-lastname" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Telefone (WhatsApp)</label>
+                <input type="tel" class="form-control" id="forced-register-phone" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-control" id="forced-register-email" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Crie uma Senha</label>
+                <input type="password" class="form-control" id="forced-register-password" required>
+            </div>
+            <button type="submit" class="btn btn--primary btn--full-width">Cadastrar e Entrar</button>
+            </form>
+        </div>
+
+        <div class="booking-summary">
+            <h3>Acesso Rápido</h3>
+            <div class="summary-item">
+            <span class="label">Ainda não tem conta?</span>
+            <span class="value">Cadastre-se em segundos.</span>
+            </div>
+            <div style="margin-top: 16px; display: flex; gap: 8px;">
+            <button class="btn btn--outline btn--full-width" onclick="showScreen('home-screen')">Ir para Início</button>
+            <button class="btn btn--secondary btn--full-width" onclick="showScreen('warnings-screen')">Agendar</button>
+            </div>
+            <div style="margin-top: 16px;">
+            <button class="btn btn--outline btn--full-width" onclick="performLogout()">Sair do Sistema</button>
+            </div>
+        </div>
+        </div>
+    </div>
+    </div>
+
+    <div id="admin-screen" class="screen">
+        <div class="container">
+            <div class="screen-header">
+                <button class="btn-back" onclick="showScreen('home-screen')">← Voltar</button>
+                <h2>Área Administrativa</h2>
+            </div>
+            
+            <div class="admin-tabs">
+                <button class="tab-btn active" onclick="showAdminTab('appointments', event)">Agendamentos</button>
+                <button class="tab-btn" onclick="showAdminTab('services', event)">Serviços</button>
+            </div>
+            
+            <div id="admin-appointments" class="admin-content">
+                <h3>Todos os Agendamentos</h3>
+                <div class="admin-appointments-list" id="admin-appointments-list">
+                    </div>
+            </div>
+            
+            <div id="admin-services" class="admin-content hidden">
+                <div class="services-header">
+                    <h3>Gerenciar Serviços</h3>
+                </div>
+                <div class="admin-services-list" id="admin-services-list">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-spinner"></div>
+        <p>Processando...</p>
+    </div>
+
+    <script src="{% static 'js/app.js' %}"></script>
+</body>
+</html>

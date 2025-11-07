@@ -1,0 +1,84 @@
+<div id="login-screen" class="screen">
+    <div class="container">
+        <div class="screen-header">
+            <button class="btn-back" onclick="showScreen('calendar-screen')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M19 12H5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 19L5 12L12 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Voltar
+            </button>
+            <h2>Finalizar Agendamento</h2>
+        </div>
+
+        <div class="login-container">
+            <div class="login-form-section">
+                <div class="form-toggle">
+                    <button class="toggle-btn active" onclick="showLoginForm(event)">Já sou cliente</button>
+                    <button class="toggle-btn" onclick="showRegisterForm(event)">Primeiro agendamento</button>
+                </div>
+
+                <form id="login-form" class="auth-form">
+                    <div class="form-group">
+                        <label class="form-label" for="login-email">Email</label>
+                        <input type="email" class="form-control" id="login-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="login-password">Senha</label>
+                        <input type="password" class="form-control" id="login-password" required>
+                    </div>
+                    <button type="submit" class="btn btn--primary btn--full-width">Entrar e Agendar</button>
+                </form>
+
+                <form id="register-form" class="auth-form hidden">
+                    <div class="form-group">
+                        <label class="form-label" for="register-name">Nome</label>
+                        <input type="text" class="form-control" id="register-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="register-lastname">Sobrenome</label>
+                        <input type="text" class="form-control" id="register-lastname" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="register-phone">Telefone (WhatsApp)</label>
+                        <input type="tel" class="form-control" id="register-phone" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="register-email">Email</label>
+                        <input type="email" class="form-control" id="register-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="register-password">Crie uma Senha</label>
+                        <input type="password" class="form-control" id="register-password" required>
+                    </div>
+                    <button type="submit" class="btn btn--primary btn--full-width">Cadastrar e Agendar</button>
+                </form>
+            </div>
+
+            <div class="booking-summary">
+                <h3>Resumo do Agendamento</h3>
+                <div class="summary-item">
+                    <span class="label">Serviço:</span>
+                    <span class="value" id="summary-service"></span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Profissional:</span>
+                    <span class="value" id="summary-professional"></span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Data:</span>
+                    <span class="value" id="summary-date"></span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Horário:</span>
+                    <span class="value" id="summary-time"></span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Duração:</span>
+                    <span class="value" id="summary-duration"></span>
+                </div>
+                <div class="summary-total">
+                    <span class="label">Total:</span>
+                    <span class="value" id="summary-price"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

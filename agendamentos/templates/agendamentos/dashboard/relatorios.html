@@ -1,0 +1,596 @@
+<!-- templates/agendamentos/dashboard/relatorios.html -->
+{% extends 'agendamentos/dashboard/base.html' %}
+
+{% block dashboard_content %}
+<h1>Relatórios</h1>
+
+<div class="dashboard-card">
+    <div class="dashboard-card-title">Geração de Relatórios</div>
+    <div class="dashboard-card-body">
+        <div class="report-filters">
+            <div class="form-group">
+                <label>Tipo de Relatório:</label>
+                <select id="report-type" class="form-control">
+                    <option value="faturamento">Faturamento</option>
+                    <option value="servicos">Serviços</option>
+                    <option value="clientes">Clientes</option>
+                    <option value="despesas">Despesas</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Período:</label>
+                <select id="report-period" class="form-control">
+                    <option value="semana">Esta Semana</option>
+                    <option value="mes" selected>Este Mês</option>
+                    <option value="ano">Este Ano</option>
+                    <option value="custom">Personalizado</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="custom-period" class="form-row hidden">
+            <div class="form-group">
+                <label>De:</label>
+                <input type="date" id="report-start" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Até:</label>
+                <input type="date" id="report-end" class="form-control">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <button id="generate-report" class="btn btn--primary">Gerar Relatório</button>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-card">
+    <div class="dashboard-card-title" id="report-title">Relatório de Faturamento</div>
+    <div class="dashboard-card-body">
+        <div class="report-period-display" id="report-period-display"></div>
+        
+        <div class="chart-container">
+            <canvas id="report-chart"></canvas>
+        </div>
+        
+        <div class="report-summary" id="report-summary">
+            <!-- Conteúdo do resumo será preenchido pelo JavaScript -->
+        </div>
+        
+        <div class="report-table-container" id="report-table-container">
+            <!-- Tabela de dados será preenchida pelo JavaScript -->
+        </div>
+        
+        <div class="report-actions">
+            <button id="download-pdf" class="btn btn--outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Baixar PDF
+            </button>
+            <button id="download-excel" class="btn btn--outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Exportar Excel
+            </button>
+            <button id="print-report" class="btn btn--outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                Imprimir
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block dashboard_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Configurações comuns para todos os gráficos
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            }
+        };
+        
+        // Elementos do DOM
+        const reportType = document.getElementById('report-type');
+        const reportPeriod = document.getElementById('report-period');
+        const customPeriod = document.getElementById('custom-period');
+        const reportStart = document.getElementById('report-start');
+        const reportEnd = document.getElementById('report-end');
+        const generateButton = document.getElementById('generate-report');
+        
+        // Configurar datas padrão
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        reportStart.valueAsDate = firstDayOfMonth;
+        reportEnd.valueAsDate = today;
+        
+        // Handlers de eventos
+        reportPeriod.addEventListener('change', function() {
+            if (this.value === 'custom') {
+                customPeriod.classList.remove('hidden');
+            } else {
+                customPeriod.classList.add('hidden');
+            }
+        });
+        
+        reportType.addEventListener('change', function() {
+            const type = this.value;
+            document.getElementById('report-title').textContent = `Relatório de ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+        });
+        
+        generateButton.addEventListener('click', generateReport);
+        
+        // Funções de relatório
+        function generateReport() {
+            const type = reportType.value;
+            const period = reportPeriod.value;
+            
+            // Configurar parâmetros da API
+            let apiUrl;
+            let apiParams = `periodo=${period}`;
+            
+            if (period === 'custom') {
+                const start = reportStart.value;
+                const end = reportEnd.value;
+                
+                if (!start || !end) {
+                    alert('Por favor, selecione um período válido.');
+                    return;
+                }
+                
+                apiParams += `&inicio=${start}&fim=${end}`;
+            }
+            
+            // Selecionar a API adequada com base no tipo de relatório
+            switch (type) {
+                case 'faturamento':
+                    apiUrl = `/api/admin/faturamento/?${apiParams}&tipo=diario`;
+                    break;
+                case 'servicos':
+                    apiUrl = `/api/admin/faturamento/?${apiParams}&tipo=servico`;
+                    break;
+                case 'clientes':
+                    // Esta API seria implementada para análise de clientes
+                    alert('Relatório de clientes não implementado neste exemplo.');
+                    return;
+                case 'despesas':
+                    apiUrl = `/api/admin/despesas/?${apiParams}`;
+                    break;
+                default:
+                    alert('Tipo de relatório inválido.');
+                    return;
+            }
+            
+            // Fazer requisição à API
+            fetch(apiUrl)
+                .then(response => response.json())
+                .then(data => {
+                    // Exibir período do relatório
+                    const periodDisplay = document.getElementById('report-period-display');
+                    const start = new Date(data.periodo.inicio);
+                    const end = new Date(data.periodo.fim);
+                    
+                    periodDisplay.textContent = `Período: ${start.toLocaleDateString('pt-BR')} a ${end.toLocaleDateString('pt-BR')}`;
+                    
+                    // Gerar visualização de acordo com o tipo
+                    switch (type) {
+                        case 'faturamento':
+                            generateFaturamentoReport(data);
+                            break;
+                        case 'servicos':
+                            generateServicosReport(data);
+                            break;
+                        case 'despesas':
+                            generateDespesasReport(data);
+                            break;
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao gerar relatório:', error);
+                    alert('Erro ao gerar relatório. Verifique o console para mais detalhes.');
+                });
+        }
+        
+        function generateFaturamentoReport(data) {
+            // Resumo
+            const summaryEl = document.getElementById('report-summary');
+            let totalFaturamento = 0;
+            let totalAgendamentos = 0;
+            
+            data.dados.forEach(item => {
+                totalFaturamento += item.total;
+                totalAgendamentos += item.quantidade;
+            });
+            
+            summaryEl.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-title">Total Faturado</div>
+                        <div class="stat-value">R$ ${totalFaturamento.toFixed(2)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Total de Agendamentos</div>
+                        <div class="stat-value">${totalAgendamentos}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Ticket Médio</div>
+                        <div class="stat-value">R$ ${(totalFaturamento / totalAgendamentos || 0).toFixed(2)}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Gráfico
+            const chartEl = document.getElementById('report-chart');
+            const ctx = chartEl.getContext('2d');
+            
+            // Destruir gráfico existente se houver
+            if (window.reportChart) {
+                window.reportChart.destroy();
+            }
+            
+            // Preparar dados para o gráfico
+            const labels = data.dados.map(item => {
+                const date = new Date(item.data);
+                return date.toLocaleDateString('pt-BR');
+            });
+            
+            const values = data.dados.map(item => item.total);
+            
+            window.reportChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Faturamento (R$)',
+                        data: values,
+                        backgroundColor: 'rgba(92, 207, 172, 0.2)',
+                        borderColor: 'rgba(92, 207, 172, 1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+            
+            // Tabela
+            const tableContainerEl = document.getElementById('report-table-container');
+            
+            let tableHTML = `
+                <div class="data-table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Quantidade</th>
+                                <th>Valor Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            data.dados.forEach(item => {
+                const date = new Date(item.data);
+                
+                tableHTML += `
+                    <tr>
+                        <td>${date.toLocaleDateString('pt-BR')}</td>
+                        <td>${item.quantidade}</td>
+                        <td>R$ ${item.total.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th>Total</th>
+                                <th>${totalAgendamentos}</th>
+                                <th>R$ ${totalFaturamento.toFixed(2)}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            `;
+            
+            tableContainerEl.innerHTML = tableHTML;
+        }
+        
+        function generateServicosReport(data) {
+            // Resumo
+            const summaryEl = document.getElementById('report-summary');
+            let totalFaturamento = 0;
+            let totalAgendamentos = 0;
+            
+            data.dados.forEach(item => {
+                totalFaturamento += item.total;
+                totalAgendamentos += item.quantidade;
+            });
+            
+            summaryEl.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-title">Total Faturado</div>
+                        <div class="stat-value">R$ ${totalFaturamento.toFixed(2)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Total de Serviços</div>
+                        <div class="stat-value">${data.dados.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Total de Agendamentos</div>
+                        <div class="stat-value">${totalAgendamentos}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Gráfico
+            const chartEl = document.getElementById('report-chart');
+            const ctx = chartEl.getContext('2d');
+            
+            // Destruir gráfico existente se houver
+            if (window.reportChart) {
+                window.reportChart.destroy();
+            }
+            
+            // Preparar dados para o gráfico
+            const labels = data.dados.map(item => item.servico);
+            const values = data.dados.map(item => item.total);
+            const colors = [
+                'rgba(92, 207, 172, 0.7)',
+                'rgba(255, 90, 95, 0.7)',
+                'rgba(13, 153, 255, 0.7)',
+                'rgba(255, 149, 0, 0.7)',
+                'rgba(155, 89, 182, 0.7)',
+                'rgba(52, 152, 219, 0.7)'
+            ];
+            
+            window.reportChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Faturamento por Serviço (R$)',
+                        data: values,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+            
+            // Tabela
+            const tableContainerEl = document.getElementById('report-table-container');
+            
+            let tableHTML = `
+                <div class="data-table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Serviço</th>
+                                <th>Quantidade</th>
+                                <th>Valor Total</th>
+                                <th>% do Faturamento</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            data.dados.sort((a, b) => b.total - a.total).forEach(item => {
+                const percentual = (item.total / totalFaturamento * 100).toFixed(2);
+                
+                tableHTML += `
+                    <tr>
+                        <td>${item.servico}</td>
+                        <td>${item.quantidade}</td>
+                        <td>R$ ${item.total.toFixed(2)}</td>
+                        <td>${percentual}%</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th>Total</th>
+                                <th>${totalAgendamentos}</th>
+                                <th>R$ ${totalFaturamento.toFixed(2)}</th>
+                                <th>100%</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            `;
+            
+            tableContainerEl.innerHTML = tableHTML;
+        }
+        
+        function generateDespesasReport(data) {
+            // Resumo
+            const summaryEl = document.getElementById('report-summary');
+            
+            summaryEl.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-title">Total de Despesas</div>
+                        <div class="stat-value">R$ ${data.total.toFixed(2)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Total de Itens</div>
+<div class="stat-value">R$ ${data.total.toFixed(2)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Total de Itens</div>
+                        <div class="stat-value">${data.despesas.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Categorias</div>
+                        <div class="stat-value">${data.resumo_categorias.length}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Gráfico
+            const chartEl = document.getElementById('report-chart');
+            const ctx = chartEl.getContext('2d');
+            
+            // Destruir gráfico existente se houver
+            if (window.reportChart) {
+                window.reportChart.destroy();
+            }
+            
+            // Preparar dados para o gráfico
+            const labels = data.resumo_categorias.map(item => item.categoria);
+            const values = data.resumo_categorias.map(item => item.total);
+            const colors = [
+                'rgba(92, 207, 172, 0.7)',
+                'rgba(255, 90, 95, 0.7)',
+                'rgba(13, 153, 255, 0.7)',
+                'rgba(255, 149, 0, 0.7)',
+                'rgba(155, 89, 182, 0.7)',
+                'rgba(52, 152, 219, 0.7)'
+            ];
+            
+            window.reportChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                        }
+                    }
+                }
+            });
+            
+            // Tabela
+            const tableContainerEl = document.getElementById('report-table-container');
+            
+            let tableHTML = `
+                <h4>Resumo por Categoria</h4>
+                <div class="data-table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Categoria</th>
+                                <th>Quantidade</th>
+                                <th>Valor Total</th>
+                                <th>% do Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            data.resumo_categorias.sort((a, b) => b.total - a.total).forEach(cat => {
+                const percentual = (cat.total / data.total * 100).toFixed(2);
+                
+                tableHTML += `
+                    <tr>
+                        <td>${cat.categoria}</td>
+                        <td>${cat.quantidade}</td>
+                        <td>R$ ${cat.total.toFixed(2)}</td>
+                        <td>${percentual}%</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th>Total</th>
+                                <th>${data.despesas.length}</th>
+                                <th>R$ ${data.total.toFixed(2)}</th>
+                                <th>100%</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                
+                <h4>Lista de Despesas</h4>
+                <div class="data-table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Descrição</th>
+                                <th>Categoria</th>
+                                <th>Valor</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            data.despesas.forEach(expense => {
+                const date = new Date(expense.data);
+                
+                tableHTML += `
+                    <tr>
+                        <td>${date.toLocaleDateString('pt-BR')}</td>
+                        <td>${expense.descricao}</td>
+                        <td>${expense.categoria}</td>
+                        <td>R$ ${expense.valor.toFixed(2)}</td>
+                        <td><span class="status status--${expense.pago ? 'success' : 'warning'}">${expense.pago ? 'Pago' : 'Pendente'}</span></td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            tableContainerEl.innerHTML = tableHTML;
+        }
+        
+        // Handlers para exportação/impressão
+        document.getElementById('download-pdf').addEventListener('click', function() {
+            alert('Funcionalidade de exportação para PDF não implementada neste exemplo.');
+        });
+        
+        document.getElementById('download-excel').addEventListener('click', function() {
+            alert('Funcionalidade de exportação para Excel não implementada neste exemplo.');
+        });
+        
+        document.getElementById('print-report').addEventListener('click', function() {
+            window.print();
+        });
+        
+        // Gerar relatório inicial
+        generateReport();
+    });
+</script>
+{% endblock %}

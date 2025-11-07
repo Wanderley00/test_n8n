@@ -1,0 +1,762 @@
+<!-- templates/agendamentos/dashboard/financeiro.html -->
+{% extends 'agendamentos/dashboard/base.html' %}
+
+{% block dashboard_content %}
+<h1>Gestão Financeira</h1>
+
+<div class="dashboard-tabs">
+    <button class="tab-btn active" data-tab="overview">Visão Geral</button>
+    <button class="tab-btn" data-tab="income">Receitas</button>
+    <button class="tab-btn" data-tab="expenses">Despesas</button>
+</div>
+
+<div class="tab-content" id="tab-overview">
+    <div class="dashboard-card">
+        <div class="dashboard-card-title">Resumo Financeiro</div>
+        <div class="dashboard-card-body">
+            <div class="action-bar">
+                <div class="period-selector">
+                    <label>Período:</label>
+                    <select id="overview-period" class="form-control">
+                        <option value="semana">Esta Semana</option>
+                        <option value="mes" selected>Este Mês</option>
+                        <option value="ano">Este Ano</option>
+                        <option value="custom">Personalizado</option>
+                    </select>
+                </div>
+                
+                <div id="custom-period" class="custom-period hidden">
+                    <div class="form-row">
+                        <input type="date" id="overview-start" class="form-control">
+                        <span>até</span>
+                        <input type="date" id="overview-end" class="form-control">
+                        <button id="overview-apply" class="btn btn--primary btn--sm">Aplicar</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-title">Receita Total</div>
+                    <div class="stat-value" id="total-income">R$ 0,00</div>
+                    <div class="stat-description">Pagamentos recebidos</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-title">Despesas</div>
+                    <div class="stat-value" id="total-expenses">R$ 0,00</div>
+                    <div class="stat-description">Total de gastos no período</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-title">Lucro</div>
+                    <div class="stat-value" id="total-profit">R$ 0,00</div>
+                    <div class="stat-description">Receita - Despesas</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-title">Pendente</div>
+                    <div class="stat-value" id="pending-income">R$ 0,00</div>
+                    <div class="stat-description">Pagamentos a receber</div>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="financial-overview-chart"></canvas>
+            </div>
+            
+            <div class="summary-table">
+                <h4>Resumo de Serviços</h4>
+                <div class="data-table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Serviço</th>
+                                <th>Quantidade</th>
+                                <th>Valor Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="services-summary">
+                            <tr>
+                                <td colspan="3">Carregando...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="tab-content hidden" id="tab-income">
+    <div class="dashboard-card">
+        <div class="dashboard-card-title">Gestão de Receitas</div>
+        <div class="dashboard-card-body">
+            <div class="action-bar">
+                <div class="period-selector">
+                    <label>Período:</label>
+                    <select id="income-period" class="form-control">
+                        <option value="semana">Esta Semana</option>
+                        <option value="mes" selected>Este Mês</option>
+                        <option value="ano">Este Ano</option>
+                        <option value="custom">Personalizado</option>
+                    </select>
+                </div>
+                
+                <div id="income-custom-period" class="custom-period hidden">
+                    <div class="form-row">
+                        <input type="date" id="income-start" class="form-control">
+                        <span>até</span>
+                        <input type="date" id="income-end" class="form-control">
+                        <button id="income-apply" class="btn btn--primary btn--sm">Aplicar</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="income-chart"></canvas>
+            </div>
+            
+            <h4>Pagamentos Recebidos</h4>
+            <div class="data-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Cliente</th>
+                            <th>Serviço</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="income-table">
+                        <tr>
+                            <td colspan="5">Carregando...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <h4>Pagamentos Pendentes</h4>
+            <div class="data-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Cliente</th>
+                            <th>Serviço</th>
+                            <th>Valor</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pending-table">
+                        <tr>
+                            <td colspan="5">Carregando...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="tab-content hidden" id="tab-expenses">
+    <div class="dashboard-card">
+        <div class="dashboard-card-title">Gestão de Despesas</div>
+        <div class="dashboard-card-body">
+            <div class="action-bar">
+                <button id="btn-add-expense" class="btn btn--primary">Nova Despesa</button>
+                
+                <div class="filters">
+                    <select id="expense-period" class="form-control">
+                        <option value="semana">Esta Semana</option>
+                        <option value="mes" selected>Este Mês</option>
+                        <option value="ano">Este Ano</option>
+                        <option value="custom">Personalizado</option>
+                    </select>
+                    
+                    <select id="expense-category" class="form-control">
+                        <option value="">Todas as Categorias</option>
+                        <option value="Aluguel">Aluguel</option>
+                        <option value="Materiais">Materiais</option>
+                        <option value="Serviços">Serviços</option>
+                        <option value="Impostos">Impostos</option>
+                        <option value="Salários">Salários</option>
+                        <option value="Outros">Outros</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="expenses-chart"></canvas>
+            </div>
+            
+            <div class="summary-table">
+                <h4>Resumo por Categoria</h4>
+                <div class="data-table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Categoria</th>
+                                <th>Quantidade</th>
+                                <th>Valor Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expenses-summary">
+                            <tr>
+                                <td colspan="3">Carregando...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <h4>Lista de Despesas</h4>
+            <div class="data-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Descrição</th>
+                            <th>Categoria</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expenses-table">
+                        <tr>
+                            <td colspan="6">Carregando...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Adicionar Despesa -->
+<div id="expense-modal" class="modal-container hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="expense-modal-title">Registrar Nova Despesa</h3>
+            <button id="expense-modal-close" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="expense-form">
+                <div class="form-group">
+                    <label class="form-label" for="expense-description">Descrição</label>
+                    <input type="text" class="form-control" id="expense-description" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="expense-amount">Valor (R$)</label>
+                    <input type="number" class="form-control" id="expense-amount" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="expense-date">Data</label>
+                    <input type="date" class="form-control" id="expense-date" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="expense-category-select">Categoria</label>
+                    <select class="form-control" id="expense-category-select" required>
+                        <option value="">Selecione...</option>
+                        <option value="Aluguel">Aluguel</option>
+                        <option value="Materiais">Materiais</option>
+                        <option value="Serviços">Serviços</option>
+                        <option value="Impostos">Impostos</option>
+                        <option value="Salários">Salários</option>
+                        <option value="Outros">Outros</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <div class="checkbox">
+                        <input type="checkbox" id="expense-paid">
+                        <label for="expense-paid">Despesa já paga</label>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button id="expense-modal-cancel" class="btn btn--outline">Cancelar</button>
+            <button id="expense-modal-save" class="btn btn--primary">Salvar Despesa</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block dashboard_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Configurações comuns para todos os gráficos
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            }
+        };
+        
+        // Tabs
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tab = this.dataset.tab;
+                
+                // Desativar todos os botões e conteúdos
+                tabBtns.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(content => content.classList.add('hidden'));
+                
+                // Ativar o botão e conteúdo selecionado
+                this.classList.add('active');
+                document.getElementById(`tab-${tab}`).classList.remove('hidden');
+                
+                // Carregar dados específicos da tab
+                if (tab === 'overview') {
+                    loadFinancialOverview();
+                } else if (tab === 'income') {
+                    loadIncomeData();
+                } else if (tab === 'expenses') {
+                    loadExpensesData();
+                }
+            });
+        });
+        
+        // Seletores de período
+        const periodSelectors = ['overview-period', 'income-period', 'expense-period'];
+        const customPeriods = ['custom-period', 'income-custom-period'];
+        
+        periodSelectors.forEach(selector => {
+            const el = document.getElementById(selector);
+            if (el) {
+                el.addEventListener('change', function() {
+                    const customPeriodId = selector === 'overview-period' ? 'custom-period' : 
+                                          selector === 'income-period' ? 'income-custom-period' : null;
+                    
+                    if (customPeriodId && this.value === 'custom') {
+                        document.getElementById(customPeriodId).classList.remove('hidden');
+                    } else if (customPeriodId) {
+                        document.getElementById(customPeriodId).classList.add('hidden');
+                        
+                        // Recarregar dados com o novo período
+                        if (selector === 'overview-period') {
+                            loadFinancialOverview();
+                        } else if (selector === 'income-period') {
+                            loadIncomeData();
+                        } else if (selector === 'expense-period') {
+                            loadExpensesData();
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Aplicar período personalizado
+        document.getElementById('overview-apply')?.addEventListener('click', loadFinancialOverview);
+        document.getElementById('income-apply')?.addEventListener('click', loadIncomeData);
+        
+        // Filtro de categoria para despesas
+        document.getElementById('expense-category')?.addEventListener('change', loadExpensesData);
+        
+        // Modal de adicionar despesa
+        document.getElementById('btn-add-expense')?.addEventListener('click', function() {
+            // Reset form
+            document.getElementById('expense-form').reset();
+            document.getElementById('expense-date').valueAsDate = new Date();
+            
+            // Show modal
+            document.getElementById('expense-modal').classList.remove('hidden');
+        });
+        
+        document.getElementById('expense-modal-close')?.addEventListener('click', function() {
+            document.getElementById('expense-modal').classList.add('hidden');
+        });
+        
+        document.getElementById('expense-modal-cancel')?.addEventListener('click', function() {
+            document.getElementById('expense-modal').classList.add('hidden');
+        });
+        
+        document.getElementById('expense-modal-save')?.addEventListener('click', function() {
+            const description = document.getElementById('expense-description').value;
+            const amount = document.getElementById('expense-amount').value;
+            const date = document.getElementById('expense-date').value;
+            const category = document.getElementById('expense-category-select').value;
+            const paid = document.getElementById('expense-paid').checked;
+            
+            if (!description || !amount || !date || !category) {
+                alert('Por favor, preencha todos os campos obrigatórios.');
+                return;
+            }
+            
+            fetch('/api/admin/registrar-despesa/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    descricao: description,
+                    valor: parseFloat(amount),
+                    data: date,
+                    categoria: category,
+                    pago: paid
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+            if (data.status === 'success') {
+                    alert('Despesa registrada com sucesso!');
+                    document.getElementById('expense-modal').classList.add('hidden');
+                    loadExpensesData();
+                    loadFinancialOverview();
+                } else {
+                    alert('Erro ao registrar despesa: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao registrar despesa:', error);
+                alert('Erro ao registrar despesa. Verifique o console para mais detalhes.');
+            });
+        });
+        
+        // Carregar dados iniciais
+        loadFinancialOverview();
+        
+        // Funções para carregar dados
+        function loadFinancialOverview() {
+            const period = document.getElementById('overview-period').value;
+            let url = `/api/admin/resumo-financeiro/?periodo=${period}`;
+            
+            if (period === 'custom') {
+                const start = document.getElementById('overview-start').value;
+                const end = document.getElementById('overview-end').value;
+                
+                if (!start || !end) {
+                    alert('Por favor, selecione um período válido.');
+                    return;
+                }
+                
+                url += `&inicio=${start}&fim=${end}`;
+            }
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    // Atualizar estatísticas
+                    document.getElementById('total-income').textContent = `R$ ${data.financeiro.faturamento.toFixed(2)}`;
+                    document.getElementById('total-expenses').textContent = `R$ ${data.financeiro.despesas.toFixed(2)}`;
+                    document.getElementById('total-profit').textContent = `R$ ${data.financeiro.lucro.toFixed(2)}`;
+                    document.getElementById('pending-income').textContent = `R$ ${data.financeiro.faturamento_pendente.toFixed(2)}`;
+                    
+                    // Classe para o lucro (positivo ou negativo)
+                    const profitElement = document.getElementById('total-profit');
+                    if (data.financeiro.lucro >= 0) {
+                        profitElement.classList.add('stat-positive');
+                        profitElement.classList.remove('stat-negative');
+                    } else {
+                        profitElement.classList.add('stat-negative');
+                        profitElement.classList.remove('stat-positive');
+                    }
+                    
+                    // Gráfico de visão geral
+                    const ctx = document.getElementById('financial-overview-chart').getContext('2d');
+                    
+                    // Destruir gráfico existente se houver
+                    if (window.overviewChart) {
+                        window.overviewChart.destroy();
+                    }
+                    
+                    window.overviewChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Receita', 'Despesas', 'Lucro'],
+                            datasets: [{
+                                label: 'Valores em R$',
+                                data: [
+                                    data.financeiro.faturamento,
+                                    data.financeiro.despesas,
+                                    data.financeiro.lucro
+                                ],
+                                backgroundColor: [
+                                    'rgba(92, 207, 172, 0.5)',
+                                    'rgba(255, 90, 95, 0.5)',
+                                    data.financeiro.lucro >= 0 ? 'rgba(92, 207, 172, 0.5)' : 'rgba(255, 90, 95, 0.5)'
+                                ],
+                                borderColor: [
+                                    'rgba(92, 207, 172, 1)',
+                                    'rgba(255, 90, 95, 1)',
+                                    data.financeiro.lucro >= 0 ? 'rgba(92, 207, 172, 1)' : 'rgba(255, 90, 95, 1)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            ...chartOptions,
+                            scales: {
+                                y: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                    
+                    // Tabela de resumo de serviços
+                    const tableBody = document.getElementById('services-summary');
+                    
+                    if (data.servicos_populares && data.servicos_populares.length > 0) {
+                        let tableHTML = '';
+                        
+                        data.servicos_populares.forEach(servico => {
+                            tableHTML += `
+                                <tr>
+                                    <td>${servico.servico__nome}</td>
+                                    <td>${servico.total}</td>
+                                    <td>R$ ${(servico.total * (servico.preco || 0)).toFixed(2)}</td>
+                                </tr>
+                            `;
+                        });
+                        
+                        tableBody.innerHTML = tableHTML;
+                    } else {
+                        tableBody.innerHTML = '<tr><td colspan="3">Nenhum serviço no período selecionado.</td></tr>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar resumo financeiro:', error);
+                    alert('Erro ao carregar dados financeiros. Verifique o console para mais detalhes.');
+                });
+        }
+        
+        function loadIncomeData() {
+            const period = document.getElementById('income-period').value;
+            let url = `/api/admin/faturamento/?periodo=${period}&tipo=diario`;
+            
+            if (period === 'custom') {
+                const start = document.getElementById('income-start').value;
+                const end = document.getElementById('income-end').value;
+                
+                if (!start || !end) {
+                    alert('Por favor, selecione um período válido.');
+                    return;
+                }
+                
+                url += `&inicio=${start}&fim=${end}`;
+            }
+            
+            // Add call to get appointments with payments status
+            fetch(`/api/admin/agendamentos-pagamento/?periodo=${period}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Update pending payments table
+                    const pendingTable = document.getElementById('pending-table');
+                    
+                    if (data.pendentes && data.pendentes.length > 0) {
+                        let tableHTML = '';
+                        
+                        data.pendentes.forEach(appointment => {
+                            const date = new Date(appointment.data);
+                            
+                            tableHTML += `
+                                <tr>
+                                    <td>${date.toLocaleDateString('pt-BR')}</td>
+                                    <td>${appointment.cliente}</td>
+                                    <td>${appointment.servico}</td>
+                                    <td>R$ ${appointment.valor.toFixed(2)}</td>
+                                    <td>
+                                        ${generatePaymentStatusSelect(appointment.status_pagamento, appointment.id)}
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        
+                        pendingTable.innerHTML = tableHTML;
+                    } else {
+                        pendingTable.innerHTML = '<tr><td colspan="5">Nenhum pagamento pendente.</td></tr>';
+                    }
+                    
+                    // Update received payments table
+                    const incomeTable = document.getElementById('income-table');
+                    
+                    if (data.pagos && data.pagos.length > 0) {
+                        let tableHTML = '';
+                        
+                        data.pagos.forEach(appointment => {
+                            const date = new Date(appointment.data);
+                            
+                            tableHTML += `
+                                <tr>
+                                    <td>${date.toLocaleDateString('pt-BR')}</td>
+                                    <td>${appointment.cliente}</td>
+                                    <td>${appointment.servico}</td>
+                                    <td>R$ ${appointment.valor.toFixed(2)}</td>
+                                    <td><span class="status status--success">${appointment.status}</span></td>
+                                </tr>
+                            `;
+                        });
+                        
+                        incomeTable.innerHTML = tableHTML;
+                    } else {
+                        incomeTable.innerHTML = '<tr><td colspan="5">Nenhum pagamento recebido no período.</td></tr>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar dados de pagamentos:', error);
+                    alert('Erro ao carregar dados de pagamentos. Verifique o console para mais detalhes.');
+                });
+            
+            // Original code for income chart remains unchanged
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    // Existing chart creation code... // O CÓDIGO ABAIXO ESTÁ FALTANDO AQUI
+                    
+                    // =================== INÍCIO DO CÓDIGO ADICIONADO ===================
+                    const ctx = document.getElementById('income-chart').getContext('2d');
+                    if (window.incomeChart) {
+                        window.incomeChart.destroy();
+                    }
+
+                    const labels = data.dados.map(item => {
+                        const date = new Date(item.data);
+                        return date.toLocaleDateString('pt-BR');
+                    });
+                    const values = data.dados.map(item => item.total);
+
+                    window.incomeChart = new Chart(ctx, {
+                        type: 'line', // Gráfico de linha é ótimo para ver faturamento ao longo do tempo
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Faturamento Diário (R$)',
+                                data: values,
+                                backgroundColor: 'rgba(92, 207, 172, 0.2)',
+                                borderColor: 'rgba(92, 207, 172, 1)',
+                                borderWidth: 2,
+                                fill: true,
+                                tension: 0.1
+                            }]
+                        },
+                        options: { ...chartOptions }
+                    });
+                    // =================== FIM DO CÓDIGO ADICIONADO ===================
+             
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar dados de receita:', error);
+                    alert('Erro ao carregar dados de receita. Verifique o console para mais detalhes.');
+                });
+        }
+        
+        function loadExpensesData() {
+            const period = document.getElementById('expense-period').value;
+            const category = document.getElementById('expense-category').value;
+            
+            let url = `/api/admin/despesas/?periodo=${period}`;
+            
+            if (category) {
+                url += `&categoria=${category}`;
+            }
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    const ctx = document.getElementById('expenses-chart').getContext('2d');
+                    if (window.expensesChart) {
+                        window.expensesChart.destroy();
+                    }
+
+                    // Prepara os dados para o gráfico de barras
+                    const sortedCategories = data.resumo_categorias.sort((a, b) => a.total - b.total);
+                    const labels = sortedCategories.map(item => item.categoria);
+                    const values = sortedCategories.map(item => item.total);
+
+                    window.expensesChart = new Chart(ctx, {
+                        type: 'bar', // Tipo de gráfico de barras
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Despesas por Categoria (R$)',
+                                data: values,
+                                backgroundColor: [
+                                    'rgba(255, 90, 95, 0.5)',
+                                    'rgba(255, 149, 0, 0.5)',
+                                    'rgba(13, 153, 255, 0.5)',
+                                    'rgba(155, 89, 182, 0.5)',
+                                    'rgba(52, 152, 219, 0.5)',
+                                    'rgba(92, 207, 172, 0.5)'
+                                ],
+                                borderColor: [
+                                    'rgba(255, 90, 95, 1)',
+                                    'rgba(255, 149, 0, 1)',
+                                    'rgba(13, 153, 255, 1)',
+                                    'rgba(155, 89, 182, 1)',
+                                    'rgba(52, 152, 219, 1)',
+                                    'rgba(92, 207, 172, 1)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            ...chartOptions,
+                            indexAxis: 'y', // <-- Isso torna o gráfico de barras HORIZONTAL
+                            scales: {
+                                x: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                    // =================== FIM DO CÓDIGO ADICIONADO ===================
+                    
+                    // Update expenses table (código que já existe)
+                    const expensesTable = document.getElementById('expenses-table');
+                    
+                    if (data.despesas && data.despesas.length > 0) {
+                        let tableHTML = '';
+                        
+                        data.despesas.forEach(expense => {
+                            const date = new Date(expense.data);
+                            
+                            tableHTML += `
+                                <tr>
+                                    <td>${date.toLocaleDateString('pt-BR')}</td>
+                                    <td>${expense.descricao}</td>
+                                    <td>${expense.categoria}</td>
+                                    <td>R$ ${expense.valor.toFixed(2)}</td>
+                                    <td><span class="status status--${expense.pago ? 'success' : 'warning'}">${expense.pago ? 'Pago' : 'Pendente'}</span></td>
+                                    <td>
+                                        <button class="btn btn--sm btn--outline" onclick="editExpense(${expense.id})">Editar</button>
+                                        ${!expense.pago ? `<button class="btn btn--sm btn--primary" onclick="markExpenseAsPaid(${expense.id})">Marcar como Pago</button>` : ''}
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        
+                        expensesTable.innerHTML = tableHTML;
+                    } else {
+                        expensesTable.innerHTML = '<tr><td colspan="6">Nenhuma despesa no período selecionado.</td></tr>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar dados de despesas:', error);
+                    alert('Erro ao carregar dados de despesas. Verifique o console para mais detalhes.');
+                });
+        }
+    });
+    
+    // Funções globais para editar despesas
+    window.editExpense = function(id) {
+        alert('Funcionalidade de edição não implementada neste exemplo. Na implementação real, isso abriria o modal com os dados da despesa.');
+    };
+    
+    window.markExpenseAsPaid = function(id) {
+        if (confirm('Deseja marcar esta despesa como paga?')) {
+            // Esta função seria implementada para chamar a API correspondente
+            alert('Funcionalidade não implementada neste exemplo. Na implementação real, isso atualizaria o status da despesa.');
+        }
+    };
+</script>
+{% endblock %}

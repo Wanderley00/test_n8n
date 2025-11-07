@@ -1,0 +1,223 @@
+{% extends 'agendamentos/dashboard/base.html' %}
+{% load static %}
+
+{% block dashboard_content %}
+<h1>Gestão do Negócio</h1>
+
+<div class="dashboard-tabs">
+    <button class="tab-btn active" data-tab="servicos">Serviços</button>
+    <button class="tab-btn" data-tab="equipe">Equipe</button>
+    <button class="tab-btn" data-tab="horarios">Meus Horários</button>
+</div>
+
+<div class="tab-content" id="tab-servicos">
+    <div class="dashboard-card">
+        <div class="dashboard-card-title">
+            Meus Serviços
+            <button id="btn-novo-servico" class="btn btn--primary btn--sm">Novo Serviço</button>
+        </div>
+        <div class="dashboard-card-body">
+            <p class="text-secondary mb-4">Adicione, edite ou remova os serviços oferecidos pelo seu negócio.</p>
+            <div class="data-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Preço</th>
+                            <th>Duração</th>
+                            <th>Profissionais</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="servicos-lista-tbody">
+                        <tr><td colspan="5">Carregando serviços...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="tab-content hidden" id="tab-equipe">
+    <div class="dashboard-card">
+        <div class="dashboard-card-title">
+            Minha Equipe
+            <button id="btn-convidar-membro" class="btn btn--primary btn--sm">Convidar Membro</button>
+        </div>
+        <div class="dashboard-card-body">
+            <p class="text-secondary mb-4">Gerencie quem pode acessar este dashboard e executar serviços.</p>
+            <div class="data-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Email</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="equipe-lista-tbody">
+                        <tr><td colspan="3">Carregando equipe...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="tab-content hidden" id="tab-horarios">
+    <div class="dashboard-card">
+        <div class="dashboard-card-title">
+            Meus Horários de Trabalho
+        </div>
+        <div class="dashboard-card-body">
+            <p class="text-secondary mb-4">
+                Defina seus blocos de trabalho para cada dia da semana. O sistema usará esses horários para calcular sua disponibilidade.
+            </p>
+            <div id="horarios-semana-container">
+                </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .dia-semana-bloco {
+        margin-bottom: 2rem;
+        border-bottom: 1px solid var(--color-light-gray);
+        padding-bottom: 1.5rem;
+    }
+    .dia-semana-bloco h4 {
+        font-size: 1.25rem;
+        margin-bottom: 1rem;
+    }
+    .horario-slot-lista {
+        list-style: none;
+        padding: 0;
+        margin-bottom: 1rem;
+    }
+    .horario-slot-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--color-light-gray);
+        padding: 0.75rem 1rem;
+        border-radius: var(--radius-base);
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+    }
+    .horario-slot-item button {
+        background: none;
+        border: none;
+        color: var(--color-red);
+        font-size: 1.25rem;
+        cursor: pointer;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+    .horario-slot-item button:hover {
+        opacity: 1;
+    }
+    .form-add-horario {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    .form-add-horario input[type="time"] {
+        width: 100px;
+        padding: 0.5rem;
+    }
+    .form-add-horario button {
+        padding: 0.6rem 1rem;
+    }
+</style>
+
+
+<div id="servico-modal" class="modal-container hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="servico-modal-title">Novo Serviço</h3>
+            <button id="servico-modal-close" class="modal-close">&times;</button>
+        </div>
+        <form id="servico-form">
+            <input type="hidden" id="servico-id">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" for="servico-nome">Nome do Serviço</label>
+                    <input type="text" class="form-control" id="servico-nome" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="servico-preco">Preço (R$)</label>
+                        <input type="number" class="form-control" id="servico-preco" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="servico-duracao">Duração (minutos)</label>
+                        <input type="number" class="form-control" id="servico-duracao" step="15" min="0" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="servico-descricao">Descrição</label>
+                    <textarea class="form-control" id="servico-descricao" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="servico-profissionais">Profissionais que executam este serviço</label>
+                    <select id="servico-profissionais" class="form-control" multiple size="5">
+                        </select>
+                    <small class="form-text">Segure Ctrl (ou Cmd) para selecionar mais de um.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="servico-modal-delete" class="btn btn--outline" style="color: #FF5A5F; border-color: #FF5A5F; margin-right: auto;">Excluir</Vbutton>
+                <button type="button" id="servico-modal-cancel" class="btn btn--outline">Cancelar</button>
+                <button type="submit" id="servico-modal-save" class="btn btn--primary">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="equipe-modal" class="modal-container hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="equipe-modal-title">Convidar Novo Membro</h3>
+            <button id="equipe-modal-close" class="modal-close">&times;</button>
+        </div>
+        <form id="equipe-form">
+            <div class="modal-body">
+                <p class="text-secondary mb-4">
+                    Você está criando uma nova conta de funcionário. Esta pessoa poderá acessar o dashboard e ser associada a serviços.
+                </p>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="equipe-nome">Nome</label>
+                        <input type="text" class="form-control" id="equipe-nome" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="equipe-sobrenome">Sobrenome</label>
+                        <input type="text" class="form-control" id="equipe-sobrenome">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="equipe-email">Email</label>
+                    <input type="email" class="form-control" id="equipe-email" required>
+                </div>
+                 <div class="form-group">
+                    <label class="form-label" for="equipe-telefone">Telefone (Opcional)</label>
+                    <input type="tel" class="form-control" id="equipe-telefone">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="equipe-password">Senha Inicial</label>
+                    <input type="password" class="form-control" id="equipe-password" required>
+                    <small class="form-text">Crie uma senha temporária. O membro poderá alterá-la depois.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="equipe-modal-cancel" class="btn btn--outline">Cancelar</button>
+                <button type="submit" id="equipe-modal-save" class="btn btn--primary">Salvar e Convidar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block dashboard_js %}
+<script src="{% static 'js/gestao.js' %}"></script>
+{% endblock %}
