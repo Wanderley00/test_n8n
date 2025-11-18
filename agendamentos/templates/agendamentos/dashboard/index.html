@@ -75,26 +75,47 @@
 {% block dashboard_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Gráfico financeiro com tamanho responsivo
+        // --- Gráfico Financeiro Estilizado ---
         const ctx = document.getElementById('financialChart').getContext('2d');
+        
+        // Criar gradiente
+        const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, 'rgba(13, 153, 255, 0.5)'); // Azul
+        gradient.addColorStop(1, 'rgba(13, 153, 255, 0.05)');
+
+        // Gradiente de Despesa
+        const gradientRed = ctx.createLinearGradient(0, 0, 0, 300);
+        gradientRed.addColorStop(0, 'rgba(255, 90, 95, 0.5)');
+        gradientRed.addColorStop(1, 'rgba(255, 90, 95, 0.05)');
+
+        // Gradiente de Lucro
+        const gradientGreen = ctx.createLinearGradient(0, 0, 0, 300);
+        gradientGreen.addColorStop(0, 'rgba(56, 161, 105, 0.5)');
+        gradientGreen.addColorStop(1, 'rgba(56, 161, 105, 0.05)');
+        
+        const lucroValor = {{ lucro_mes }};
+        const lucroBackground = lucroValor >= 0 ? gradientGreen : gradientRed;
+        const lucroBorder = lucroValor >= 0 ? 'rgba(56, 161, 105, 1)' : 'rgba(255, 90, 95, 1)';
+
         const financialChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: ['Faturamento', 'Despesas', 'Lucro'],
                 datasets: [{
                     label: 'Valores em R$',
-                    data: [{{ faturamento_mes }}, {{ despesas_mes }}, {{ lucro_mes }}],
+                    data: [{{ faturamento_mes }}, {{ despesas_mes }}, lucroValor],
                     backgroundColor: [
-                        'rgba(92, 207, 172, 0.5)',
-                        'rgba(255, 90, 95, 0.5)',
-                        {% if lucro_mes|add:0 >= 0 %}'rgba(92, 207, 172, 0.5)'{% else %}'rgba(255, 90, 95, 0.5)'{% endif %}
+                        gradient,
+                        gradientRed,
+                        lucroBackground
                     ],
                     borderColor: [
-                        'rgba(92, 207, 172, 1)',
+                        'rgba(13, 153, 255, 1)',
                         'rgba(255, 90, 95, 1)',
-                        {% if lucro_mes|add:0 >= 0 %}'rgba(92, 207, 172, 1)'{% else %}'rgba(255, 90, 95, 1)'{% endif %}
+                        lucroBorder
                     ],
-                    borderWidth: 1
+                    borderWidth: 2,
+                    borderRadius: 5
                 }]
             },
             options: {
@@ -102,64 +123,85 @@
                 maintainAspectRatio: false,
                 scales: {
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        grid: {
+                            display: true,
+                            color: '#EDF2F7', // Cor da grade suave
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: '#4A5568', // Cor do texto dos eixos
+                            font: { family: "'Inter', sans-serif" }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false // Sem grade vertical
+                        },
+                        ticks: {
+                            color: '#4A5568',
+                            font: { family: "'Inter', sans-serif" }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false // Esconde a legenda
+                    },
+                    tooltip: {
+                        enabled: true,
+                        backgroundColor: '#1A202C',
+                        titleFont: { family: "'Inter', sans-serif", size: 14 },
+                        bodyFont: { family: "'Inter', sans-serif", size: 12 },
+                        padding: 12,
+                        cornerRadius: 8
                     }
                 }
             }
         });
         
-        // Carregar próximos agendamentos
+        // --- Carregar próximos agendamentos (lógica mantida) ---
         fetch('/api/admin/agendamentos-calendario/?start={{ hoje|date:"Y-m-d" }}&end={{ hoje|date:"Y-m-d" }}')
             .then(response => response.json())
             .then(data => {
                 const upcomingEl = document.getElementById('upcoming-appointments');
-                
                 if (data.length === 0) {
-                    upcomingEl.innerHTML = '<p>Nenhum agendamento para hoje.</p>';
+                    upcomingEl.innerHTML = '<p class="text-secondary" style="text-align: center; padding: 1rem;">Nenhum agendamento para hoje.</p>';
                     return;
                 }
                 
-                let html = '<ul class="appointment-list" style="list-style: none; padding: 0; margin: 0;">';
+                let html = '<ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 16px;">';
                 data.forEach(event => {
                     const start = new Date(event.start);
                     html += `
-                            <div class="appointment-time" style="background: var(--color-mint-green-light); padding: 6px 10px; border-radius: 6px; min-width: 60px; text-align: center; margin-right: 12px;">
+                        <li style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #F7FAFC; border-radius: 8px;">
+                            <div style="background: var(--color-primary-light); color: var(--color-primary-active); padding: 10px; border-radius: 6px; font-weight: 600; font-size: 0.9rem;">
                                 ${start.getHours().toString().padStart(2, '0')}:${start.getMinutes().toString().padStart(2, '0')}
                             </div>
-                            <div class="appointment-details" style="flex: 1;">
-                                <div class="appointment-title" style="font-weight: 600;">${event.extendedProps.cliente}</div>
-                                <div class="appointment-service" style="color: var(--color-text-secondary); font-size: 0.9rem;">${event.extendedProps.servico}</div>
-                                <div class="status ${event.extendedProps.status_pagamento === 'Pago' ? 'status--success' : 'status--warning'}" style="margin-top: 4px; display: inline-block;">
-                                    ${event.extendedProps.status_pagamento}
-                                </div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: var(--color-gray-900);">${event.extendedProps.cliente}</div>
+                                <div style="color: var(--color-gray-500); font-size: 0.9rem;">${event.extendedProps.servico}</div>
                             </div>
+                            <span class="status status--${event.extendedProps.status_pagamento === 'Pago' ? 'success' : 'warning'}">${event.extendedProps.status_pagamento}</span>
                         </li>
                     `;
                 });
                 html += '</ul>';
-                
                 upcomingEl.innerHTML = html;
-            })
-            .catch(error => {
-                console.error('Erro ao carregar agendamentos:', error);
-                document.getElementById('upcoming-appointments').innerHTML = '<p>Erro ao carregar agendamentos.</p>';
             });
-            
-        // Carregar atividade recente
+        
+        // --- Carregar atividade recente (lógica mantida) ---
         fetch('/api/admin/agendamentos-calendario/?start={{ semana_passada|date:"Y-m-d" }}&end={{ hoje|date:"Y-m-d" }}')
             .then(response => response.json())
             .then(data => {
                 const activityEl = document.getElementById('recent-activity');
-                
                 if (data.length === 0) {
-                    activityEl.innerHTML = '<p>Nenhuma atividade recente.</p>';
+                    activityEl.innerHTML = '<p class="text-secondary" style="text-align: center; padding: 1rem;">Nenhuma atividade recente.</p>';
                     return;
                 }
                 
-                // Ordena por data (mais recente primeiro)
                 data.sort((a, b) => new Date(b.start) - new Date(a.start));
-                
-                let html = '<ul class="activity-list" style="list-style: none; padding: 0; margin: 0;">';
+                let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
                 data.slice(0, 5).forEach(event => {
                     const date = new Date(event.start);
                     const today = new Date();
@@ -167,35 +209,26 @@
                     yesterday.setDate(yesterday.getDate() - 1);
                     
                     let dateStr;
-                    if (date.toDateString() === today.toDateString()) {
-                        dateStr = 'Hoje';
-                    } else if (date.toDateString() === yesterday.toDateString()) {
-                        dateStr = 'Ontem';
-                    } else {
-                        dateStr = date.toLocaleDateString('pt-BR');
-                    }
+                    if (date.toDateString() === today.toDateString()) { dateStr = 'Hoje'; }
+                    else if (date.toDateString() === yesterday.toDateString()) { dateStr = 'Ontem'; }
+                    else { dateStr = date.toLocaleDateString('pt-BR'); }
                     
                     html += `
-                        <li class="activity-item" style="display: flex; padding: 12px 0; border-bottom: 1px solid var(--color-light-gray);">
-                            <div class="activity-icon" style="width: 12px; height: 12px; border-radius: 50%; background-color: ${event.color}; margin-right: 12px; margin-top: 6px;"></div>
-                            <div class="activity-details" style="flex: 1;">
-                                <div class="activity-title" style="font-weight: 500;">${event.extendedProps.cliente} - ${event.extendedProps.servico}</div>
-                                <div class="activity-meta" style="display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.85rem; color: var(--color-text-secondary);">
-                                    <span class="activity-date">${dateStr} às ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}</span>
-                                    <span class="activity-status">${event.extendedProps.status}</span>
-                                    <span class="activity-payment">${event.extendedProps.status_pagamento}</span>
+                        <li style="display: flex; padding: 12px 0; border-bottom: 1px solid var(--color-gray-100);">
+                            <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${event.color}; margin-right: 12px; margin-top: 6px; flex-shrink: 0;"></div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 500; color: var(--color-gray-700);">${event.extendedProps.cliente} - ${event.extendedProps.servico}</div>
+                                <div style="display: flex; gap: 12px; font-size: 0.85rem; color: var(--color-gray-500); margin-top: 4px;">
+                                    <span>${dateStr} às ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}</span>
+                                    <span>${event.extendedProps.status}</span>
+                                    <span>${event.extendedProps.status_pagamento}</span>
                                 </div>
                             </div>
                         </li>
                     `;
                 });
                 html += '</ul>';
-                
                 activityEl.innerHTML = html;
-            })
-            .catch(error => {
-                console.error('Erro ao carregar atividade recente:', error);
-                document.getElementById('recent-activity').innerHTML = '<p>Erro ao carregar atividade recente.</p>';
             });
     });
 </script>

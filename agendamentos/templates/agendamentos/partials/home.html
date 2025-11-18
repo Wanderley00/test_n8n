@@ -4,18 +4,24 @@
         <div class="hero-content">
             
             <div class="logo-section">
+                <img id="negocio-logo" class="negocio-logo" src="" alt="Logo do Negócio" style="display: none;">
                 <h1 class="logo">Bella Designer</h1>
                 <p class="tagline">Espaço dedicado à beleza e bem-estar</p>
             </div>
             <div class="action-buttons">
-                <button class="btn btn--primary btn--lg" onclick="showScreen('warnings-screen')">
+                <button class="btn btn--primary" onclick="startBookingFlow()">
                     Agendar Horário
                 </button>
-                <button class="btn btn--outline btn--lg" onclick="showScreen('client-area-screen')">
+
+                <button id="btn-portfolio" class="btn btn--outline hidden" onclick="openPortfolioModal()">
+                    Ver Portfólio
+                </button>
+
+                <button class="btn btn--outline" onclick="showScreen('client-area-screen')">
                     Área do Cliente
                 </button>
                 
-                <button id="home-logout-button" class="btn btn--outline btn--lg hidden" onclick="performLogout(event)">
+                <button id="home-logout-button" class="btn btn--outline hidden" onclick="performLogout(event)">
                     Sair
                 </button>
             </div>

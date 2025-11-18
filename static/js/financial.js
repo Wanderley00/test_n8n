@@ -6,9 +6,6 @@
  * @param {number} expenseId - The ID of the expense to mark as paid
  */
 window.markExpenseAsPaid = async function(expenseId) {
-    if (!confirm('Confirmar marcar esta despesa como paga?')) {
-        return;
-    }
     
     try {
         const response = await fetch(`/api/admin/atualizar-despesa/${expenseId}/`, {

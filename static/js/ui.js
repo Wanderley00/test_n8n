@@ -14,6 +14,7 @@
  * @param {Function} options.onConfirm - Função de callback para confirmação
  * @param {Function} options.onCancel - Função de callback para cancelamento (opcional)
  * @param {boolean} options.showCancel - Se deve mostrar o botão de cancelar (padrão: true)
+ * @param {boolean} options.showConfirm - Se deve mostrar o botão de confirmar (padrão: true)
  */
 window.showModal = function(options) {
     const modalContainer = document.getElementById('modal-container');
@@ -22,21 +23,35 @@ window.showModal = function(options) {
     const modalConfirm = document.getElementById('modal-confirm');
     const modalCancel = document.getElementById('modal-cancel');
     const modalClose = document.getElementById('modal-close');
-    
+
+    const modalFooter = document.getElementById('modal-footer');
     // Define o conteúdo
     modalTitle.textContent = options.title || 'Aviso';
     modalBody.innerHTML = options.message || '';
-    
     // Configura os botões
     modalConfirm.textContent = options.confirmText || 'Confirmar';
     modalCancel.textContent = options.cancelText || 'Cancelar';
-    
     // Configura visibilidade do botão cancelar
     if (options.showCancel === false) {
         modalCancel.classList.add('hidden');
     } else {
         modalCancel.classList.remove('hidden');
     }
+
+    // --- BLOCO MODIFICADO (Adiciona lógica para o "Confirmar" e centralização) ---
+    if (options.showConfirm === false) {
+        modalConfirm.classList.add('hidden');
+        // <-- MUDANÇA (Esconde o botão)
+        // Centraliza o footer quando SÓ o "cancelar" estiver visível
+        if (modalFooter) modalFooter.style.justifyContent = 'center';
+        // <-- MUDANÇA (Centraliza)
+    } else {
+        modalConfirm.classList.remove('hidden');
+        // Restaura o padrão (flex-end)
+        if (modalFooter) modalFooter.style.justifyContent = 'flex-end';
+        // <-- MUDANÇA (Restaura)
+    }
+    // --- FIM DO BLOCO MODIFICADO ---
     
     // Configura os eventos
     const handleConfirm = () => {
@@ -57,12 +72,10 @@ window.showModal = function(options) {
     modalConfirm.replaceWith(modalConfirm.cloneNode(true));
     modalCancel.replaceWith(modalCancel.cloneNode(true));
     modalClose.replaceWith(modalClose.cloneNode(true));
-    
     // Adiciona novos event listeners
     document.getElementById('modal-confirm').addEventListener('click', handleConfirm);
     document.getElementById('modal-cancel').addEventListener('click', handleCancel);
     document.getElementById('modal-close').addEventListener('click', handleCancel);
-    
     // Exibe o modal
     modalContainer.classList.remove('hidden');
     
@@ -75,7 +88,6 @@ window.showModal = function(options) {
     };
     document.addEventListener('keydown', escHandler);
 };
-
 /**
  * Oculta o modal
  */
@@ -83,7 +95,6 @@ window.hideModal = function() {
     const modalContainer = document.getElementById('modal-container');
     modalContainer.classList.add('hidden');
 };
-
 // --- TOAST NOTIFICATIONS ---
 /**
  * Exibe uma notificação toast
@@ -110,7 +121,6 @@ window.showToast = function(options) {
         </div>
         <button class="toast-close">&times;</button>
     `;
-    
     // Adiciona ao container
     toastContainer.appendChild(toast);
     
@@ -118,20 +128,17 @@ window.showToast = function(options) {
     setTimeout(() => {
         toast.classList.add('toast--visible');
     }, 10);
-    
     // Configura o botão de fechar
     const closeBtn = toast.querySelector('.toast-close');
     closeBtn.addEventListener('click', () => {
         removeToast(toast);
     });
-    
     // Configura auto-remoção
     const duration = options.duration || 3000;
     setTimeout(() => {
         removeToast(toast);
     }, duration);
 };
-
 /**
  * Remove uma notificação toast com animação
  * @param {HTMLElement} toast - Elemento toast a ser removido
@@ -148,14 +155,14 @@ function removeToast(toast) {
         if (toastContainer && toastContainer.children.length === 0) {
             toastContainer.remove();
         }
-    }, 300); // Duração da animação de saída
+    }, 300);
+    // Duração da animação de saída
 }
 
 // --- FUNÇÕES DE LOADING ---
 window.showLoading = function() {
     document.getElementById('loading-overlay').classList.remove('hidden');
 };
-
 window.hideLoading = function() {
     document.getElementById('loading-overlay').classList.add('hidden');
 };
@@ -178,7 +185,7 @@ window.clearForm = function(formId) {
             field.value = '';
             // Dispara evento de mudança para atualizar estado
             field.dispatchEvent(new Event('change', { bubbles: true }));
-        }
+         }
     });
 };
 
@@ -194,7 +201,6 @@ window.showLoginForm = function(event) {
 
     if (loginForm) loginForm.classList.remove('hidden');
     if (registerForm) registerForm.classList.add('hidden');
-
     const toggleContainer = event.target.closest('.form-toggle');
     if (toggleContainer) {
         toggleContainer.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
@@ -213,7 +219,6 @@ window.showRegisterForm = function(event) {
 
     if (loginForm) loginForm.classList.add('hidden');
     if (registerForm) registerForm.classList.remove('hidden');
-
     const toggleContainer = event.target.closest('.form-toggle');
     if (toggleContainer) {
         toggleContainer.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
@@ -242,14 +247,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         .toast {
             min-width: 250px;
-            padding: 12px 16px;
+             padding: 12px 16px;
             border-radius: var(--radius-base);
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             display: flex;
             justify-content: space-between;
             align-items: center;
             transform: translateX(100%);
-            opacity: 0;
+             opacity: 0;
             transition: transform 0.3s, opacity 0.3s;
         }
         
@@ -386,4 +391,163 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
     
     document.head.appendChild(style);
+
+    // =================================================================
+    // INÍCIO: Máscara de Telefone
+    // =================================================================
+    function formatPhoneInput(e) {
+        // Remove tudo que não for dígito
+        let value = e.target.value.replace(/\D/g, '');
+        // Limita a 11 dígitos (DD + 9 do celular)
+        value = value.substring(0, 11);
+        // Aplica a máscara (XX) XXXXXXXXX
+        if (value.length > 2) {
+            value = `(${value.substring(0, 2)}) ${value.substring(2)}`;
+        } else if (value.length > 0) {
+            // Adiciona o parêntese inicial
+            value = `(${value.substring(0, 2)}`;
+        }
+        
+        // Define o valor formatado de volta no campo
+        e.target.value = value;
+    }
+
+    // Lista de todos os IDs de campos de telefone que precisam da máscara
+    const phoneInputIds = [
+        'login-phone',          
+        'register-phone',       
+        'forced-login-phone',
+        'forced-register-phone',
+        'profile-phone',        
+        'equipe-telefone',      
+        'equipe-edit-telefone'  // (Do modal que criamos)
+    ];
+
+    phoneInputIds.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            // Adiciona o listener de "input" para formatar em tempo real
+            input.addEventListener('input', formatPhoneInput);
+        }
+    });
+    // =================================================================
+    // FIM: Máscara de Telefone
+    // =================================================================
+
+    
+    // =================================================================
+    // INÍCIO: Ajuste do Campo de Data de Nascimento para Mobile
+    // =================================================================
+
+    /**
+     * Formata o input de data como dd/mm/aaaa enquanto o usuário digita
+     */
+    function formatBirthdayInput(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        // Remove tudo que não for dígito
+        value = value.substring(0, 8);
+        // Limita a 8 dígitos (ddmmyyyy)
+
+        if (value.length > 4) {
+            // Se tiver mais de 4 dígitos (ex: 2604200) -> 26/04/200
+            value = `${value.substring(0, 2)}/${value.substring(2, 4)}/${value.substring(4)}`;
+        } else if (value.length > 2) {
+            // Se tiver mais de 2 dígitos (ex: 2604) -> 26/04
+            value = `${value.substring(0, 2)}/${value.substring(2)}`;
+        }
+        
+        e.target.value = value;
+    }
+    
+    /**
+     * Verifica se é um dispositivo com tela de toque (proxy para mobile)
+     */
+    function isMobileDevice() {
+        return ('ontouchstart' in window) ||
+        (navigator.maxTouchPoints > 0);
+    }
+
+    // Se for um dispositivo móvel...
+    if (isMobileDevice()) {
+        // Lista de todos os IDs de campos de DATA DE NASCIMENTO
+        const birthdayInputIds = [
+            'login-nascimento',
+            'register-nascimento',
+            'forced-login-nascimento',
+            'forced-register-nascimento',
+            'profile-nascimento'
+        ];
+        
+        birthdayInputIds.forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.type = 'text'; // Muda de "date" para "text"
+                input.placeholder = 'dd/mm/aaaa'; // Adiciona o placeholder
+                input.setAttribute('inputmode', 'numeric'); // Pede o teclado numérico
+                 
+                // --- 2. ADICIONE ESTA LINHA ---
+                input.addEventListener('input', formatBirthdayInput); // Aplica a máscara
+            }
+        });
+    }
+    // =================================================================
+    // FIM: Ajuste do Campo de Data de Nascimento
+    // =================================================================
+    // =================================================================
+    // INÍCIO: Conversores de Data (dd/mm/aaaa <-> YYYY-MM-DD)
+    // =================================================================
+
+    /**
+     * Converte data de dd/mm/aaaa para YYYY-MM-DD
+     * @param {string} dateString - Data no formato dd/mm/aaaa
+     * @returns {string|null} - Data no formato YYYY-MM-DD ou null se inválido
+     */
+    window.convertDateToISO = function(dateString) {
+ 
+         if (!dateString) return null;
+         // Se a data já estiver no formato ISO (do PC), retorna ela mesma
+        if (dateString.includes('-') && dateString.length === 10) {
+            return dateString;
+        }
+
+        // Se estiver no formato dd/mm/aaaa
+        if (dateString.length !== 10) return null;
+        // Garante que tem 10 caracteres
+        
+        const parts = dateString.split('/');
+        if (parts.length !== 3) return null; // Formato inválido
+        
+        const day = parts[0];
+        const month = parts[1];
+        const year = parts[2];
+        
+        if (year.length !== 4) return null;
+        // Ano inválido
+        
+        return `${year}-${month}-${day}`;
+    }
+
+    /**
+     * Converte data de YYYY-MM-DD para dd/mm/aaaa
+     * @param {string} isoString - Data no formato YYYY-MM-DD
+     * @returns {string|null} - Data no formato dd/mm/aaaa ou null se inválido
+     */
+    window.convertISOToDate = function(isoString) {
+        if (!isoString || !isoString.includes('-') || isoString.length !== 10) {
+            return "";
+            // Retorna vazio se a data for nula ou inválida
+        }
+
+        const parts = isoString.split('-');
+        if (parts.length !== 3) return "";
+        
+        const year = parts[0];
+        const month = parts[1];
+        const day = parts[2];
+
+        return `${day}/${month}/${year}`;
+    }
+    // =================================================================
+    // FIM: Conversores de Data
+    // =================================================================
 });

@@ -2,13 +2,17 @@
 // Sistema de calendário e agendamento
 
 // --- VARIÁVEIS GLOBAIS ---
-let selectedService = null;
-let selectedProfessional = null;
-let selectedDate = null;
-let selectedTime = null;
+// As variáveis de estado (selectedService, selectedProfessional, selectedTierInfo, etc.)
+// são definidas em auth.js para garantir a ordem de carregamento.
+
+// --- VARIÁVEIS LOCAIS DO CALENDÁRIO ---
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
-let reschedulingAppointmentId = null;
+let paymentPollingInterval = null; // Guarda o ID do setInterval
+let paymentTimerInterval = null;   // Guarda o ID do setInterval do timer
+let currentPendingAgendamentoId = null; // Guarda o ID do agendamento pendente
+// --- FIM DAS VARIÁVEIS LOCAIS ---
+
 
 // --- FUNÇÕES DE INICIALIZAÇÃO ---
 
@@ -16,15 +20,29 @@ let reschedulingAppointmentId = null;
  * Carrega o calendário e configurações iniciais
  */
 function loadCalendar() {
+    // Para qualquer limpeza de agendamento anterior
+    stopPaymentPolling();
+
     updateCalendarHeader();
-    generateCalendar();
+    
+    // Passa a duração selecionada para a geração do calendário
+    // selectedTierInfo é global (de auth.js) e foi definido em services.js
+    if (!selectedTierInfo || selectedTierInfo.duracao === 0) {
+        console.error("Erro: A duração do serviço (selectedTierInfo.duracao) é 0. Voltando.");
+        showToast({message: "Erro ao carregar dados do serviço. Tente selecionar novamente.", type: "error"});
+        showScreen('services-screen'); // Volta para a tela de serviços
+        return;
+    }
+    
+    generateCalendar(selectedTierInfo.duracao, selectedTierInfo.tierId);
+    
     updateSelectedServiceInfo();
     
     // Limpa seleções anteriores
     document.getElementById('time-selection').classList.add('hidden');
     document.getElementById('continue-to-login').disabled = true;
-    selectedDate = null;
-    selectedTime = null;
+    selectedDate = null; // selectedDate é global (de auth.js)
+    selectedTime = null; // selectedTime é global (de auth.js)
 }
 
 /**
@@ -40,46 +58,87 @@ function updateCalendarHeader() {
  */
 function updateSelectedServiceInfo() {
     const serviceInfo = document.getElementById('selected-service-info');
-    if (selectedService && serviceInfo) {
-        // Formata a duração e o preço
-        const duracao = selectedService.duracao_formatada || `${selectedService.duracao_minutos} min`;
-        const preco = selectedService.price.toFixed(2).replace('.', ',');
+    
+    // selectedService e selectedTierInfo são globais (de auth.js)
+    if (selectedService && serviceInfo && selectedTierInfo) {
+        // Usa os dados do tier selecionado (preço e duração)
+        const duracao = formatarDuracao(selectedTierInfo.duracao);
+        const preco = selectedTierInfo.preco.toFixed(2).replace('.', ',');
+        
+        // Exibe adiantamento
+        let adiantamentoHTML = '';
+        if (selectedTierInfo.valor_adiantamento > 0) {
+            const adiantamento = selectedTierInfo.valor_adiantamento.toFixed(2).replace('.', ',');
+            adiantamentoHTML = `<span class="service-price-signal">Adiantamento: R$ ${adiantamento}</span>`;
+        }
+
+        let imagemHTML = '';
+        if (selectedService.image_url) {
+            imagemHTML = `<img src="${selectedService.image_url}" alt="${selectedService.name}" class="service-info-img">`;
+        } else {
+            imagemHTML = `<div class="service-icon">${selectedService.icon || '✨'}</div>`;
+        }
+
+        let nomeExibido = selectedService.name;
+        if (selectedTierInfo.tierId) {
+            const tier = selectedService.tiers_manutencao.find(t => t.id === selectedTierInfo.tierId);
+            if (tier) {
+                nomeExibido = tier.nome_tier;
+            }
+        }
         
         serviceInfo.innerHTML = `
             <div class="service-info-card">
-                <div class="service-icon">${selectedService.icon}</div>
+                ${imagemHTML}
                 <div class="service-details">
-                    <h3>${selectedService.name}</h3>
+                    <h3>${nomeExibido}</h3>
                     <div class="service-meta">
                         <span class="service-duration">${duracao}</span>
-                        <span class="service-price">R$ ${preco}</span>
+                        <span class="service-price">Total: R$ ${preco}</span>
+                        ${adiantamentoHTML}
                     </div>
                 </div>
             </div>
-        `;
+         `;
     }
 }
+
+
+// Helper para formatar duração (pode ser global)
+function formatarDuracao(minutos) {
+  const horas = Math.floor(minutos / 60);
+  const mins = minutos % 60;
+
+  if (horas > 0) {
+    return mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
+  }
+  return `${mins} min`;
+}
+
 
 /**
  * Gera a visualização do calendário para o mês atual
  */
-async function generateCalendar() {
+async function generateCalendar(duracao, tierId) {
     const calendarGrid = document.getElementById('calendar-grid');
     calendarGrid.innerHTML = '<div class="loading-indicator"><div class="loading-spinner"></div></div>'; // Mostra loading
 
-    // --- NOVA LÓGICA ---
     // Busca os dias com horários disponíveis para o mês corrente
     let availableDays = [];
     try {
-        const response = await fetch(`/${empreendedorSlug}/api/dias_disponiveis/?mes=${currentMonth + 1}&ano=${currentYear}&servico_id=${selectedService.id}&empreendedor_id=${selectedProfessional.id}`);
+        // Usa as variáveis globais selectedService e selectedProfessional
+        let apiUrl = `/${empreendedorSlug}/api/dias_disponiveis/?mes=${currentMonth + 1}&ano=${currentYear}&servico_id=${selectedService.id}&empreendedor_id=${selectedProfessional.id}&duracao=${duracao}`;
+        if (tierId) {
+            apiUrl += `&tier_id=${tierId}`;
+        }
         
+        const response = await fetch(apiUrl);
         if (response.ok) {
             availableDays = await response.json();
         }
     } catch (error) {
         console.error("Não foi possível buscar os dias disponíveis:", error);
     }
-    // --- FIM DA NOVA LÓGICA ---
 
     calendarGrid.innerHTML = ''; // Limpa o loading
 
@@ -91,7 +150,7 @@ async function generateCalendar() {
         dayHeader.textContent = day;
         calendarGrid.appendChild(dayHeader);
     });
-
+    
     const firstDay = new Date(currentYear, currentMonth, 1).getDay();
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     const today = new Date();
@@ -109,18 +168,20 @@ async function generateCalendar() {
         const currentDate = new Date(currentYear, currentMonth, day);
         const dateString = formatDateForAPI(currentDate);
 
-        if (currentDate < today || currentDate.getDay() === 0) {
+        // 1. Bloqueia dias no passado
+        if (currentDate < today) {
             dayElement.classList.add('unavailable');
-        } else {
+        } 
+        // 2. Verifica se a API (dias_disponiveis) retornou este dia
+        else if (availableDays.includes(dateString)) {
+            // Se sim, é um dia clicável e com horários
             dayElement.classList.add('available');
-            dayElement.onclick = () => selectDate(dateString, dayElement);
-
-            // --- NOVA LÓGICA ---
-            // Adiciona a classe se o dia estiver na lista de dias disponíveis
-            if (availableDays.includes(dateString)) {
-                dayElement.classList.add('has-availability');
-            }
-            // --- FIM DA NOVA LÓGICA ---
+            dayElement.classList.add('has-availability'); // Adiciona o ponto
+            dayElement.onclick = () => selectDate(dateString, dayElement, duracao, tierId);
+        } 
+        // 3. Se não está no passado E não foi retornado pela API, é indisponível
+        else {
+            dayElement.classList.add('unavailable');
         }
 
         if (isSameDay(currentDate, today)) {
@@ -139,7 +200,6 @@ async function generateCalendar() {
  */
 window.changeMonth = function(direction) {
     currentMonth += direction;
-    
     if (currentMonth > 11) {
         currentMonth = 0;
         currentYear++;
@@ -148,7 +208,9 @@ window.changeMonth = function(direction) {
         currentYear--;
     }
     
-    generateCalendar();
+    // Passa a duração e o tier selecionados (globais)
+    generateCalendar(selectedTierInfo.duracao, selectedTierInfo.tierId);
+    
     updateCalendarHeader();
 };
 
@@ -157,26 +219,27 @@ window.changeMonth = function(direction) {
  * @param {string} dateString - Data no formato YYYY-MM-DD
  * @param {HTMLElement} dayElement - Elemento HTML do dia
  */
-window.selectDate = async function(dateString, dayElement) {
+window.selectDate = async function(dateString, dayElement, duracao, tierId) {
     if (dayElement.classList.contains('unavailable')) return;
-    
+
     // Atualiza UI
     document.querySelectorAll('.calendar-day.selected').forEach(d => d.classList.remove('selected'));
     dayElement.classList.add('selected');
-    selectedDate = dateString;
-    
+    selectedDate = dateString; // Atualiza o estado global
+
     // Limpa seleções anteriores e exibe carregamento
     const timeSelection = document.getElementById('time-selection');
     const timeSlots = document.getElementById('time-slots');
     timeSelection.classList.remove('hidden');
     timeSlots.innerHTML = '<div class="loading-indicator"><div class="loading-spinner small"></div><p>Buscando horários disponíveis...</p></div>';
     document.getElementById('continue-to-login').disabled = true;
-    selectedTime = null;
+    selectedTime = null; // Atualiza o estado global
 
     try {
-        // Chama a API para buscar horários disponíveis
-        const response = await fetch(`/${empreendedorSlug}/api/horarios_disponiveis/?data=${dateString}&servico_id=${selectedService.id}&empreendedor_id=${selectedProfessional.id}`);
+        // Passa a duração para a API de horários
+        let apiUrl = `/${empreendedorSlug}/api/horarios_disponiveis/?data=${dateString}&servico_id=${selectedService.id}&empreendedor_id=${selectedProfessional.id}&duracao=${duracao}`;
         
+        const response = await fetch(apiUrl);
         if (!response.ok) {
             throw new Error('Falha ao buscar horários.');
         }
@@ -220,58 +283,47 @@ function showTimeSlots(availableTimes) {
         const hour = parseInt(time.split(':')[0]);
         return hour >= 8 && hour < 12;
     });
-    
     const tarde = availableTimes.filter(time => {
         const hour = parseInt(time.split(':')[0]);
-        return hour >= 14 && hour < 18;
+        return hour >= 12 && hour < 18; // Ajustado para pegar 12:00
+    });
+    const noite = availableTimes.filter(time => {
+         const hour = parseInt(time.split(':')[0]);
+         return hour >= 18;
     });
 
     // Cria containers para os períodos
     const timeSlotsContainer = document.createElement('div');
     timeSlotsContainer.className = 'time-periods-container';
-    
-    // Adiciona período da manhã se houver horários
-    if (manha.length > 0) {
-        const manhaContainer = document.createElement('div');
-        manhaContainer.className = 'time-period';
-        manhaContainer.innerHTML = '<h4 class="period-title">Manhã</h4>';
+
+    // Função helper para criar um período
+    const createPeriodSection = (title, times) => {
+        if (times.length === 0) return;
         
-        const manhaSlots = document.createElement('div');
-        manhaSlots.className = 'time-slots-grid';
+        const container = document.createElement('div');
+        container.className = 'time-period';
+        container.innerHTML = `<h4 class="period-title">${title}</h4>`;
         
-        manha.forEach(time => {
+        const slotsGrid = document.createElement('div');
+        slotsGrid.className = 'time-slots-grid';
+        
+        times.forEach(time => {
             const timeSlot = document.createElement('div');
             timeSlot.className = 'time-slot';
             timeSlot.textContent = time;
             timeSlot.onclick = () => selectTime(time, timeSlot);
-            manhaSlots.appendChild(timeSlot);
+            slotsGrid.appendChild(timeSlot);
         });
         
-        manhaContainer.appendChild(manhaSlots);
-        timeSlotsContainer.appendChild(manhaContainer);
-    }
-    
-    // Adiciona período da tarde se houver horários
-    if (tarde.length > 0) {
-        const tardeContainer = document.createElement('div');
-        tardeContainer.className = 'time-period';
-        tardeContainer.innerHTML = '<h4 class="period-title">Tarde</h4>';
-        
-        const tardeSlots = document.createElement('div');
-        tardeSlots.className = 'time-slots-grid';
-        
-        tarde.forEach(time => {
-            const timeSlot = document.createElement('div');
-            timeSlot.className = 'time-slot';
-            timeSlot.textContent = time;
-            timeSlot.onclick = () => selectTime(time, timeSlot);
-            tardeSlots.appendChild(timeSlot);
-        });
-        
-        tardeContainer.appendChild(tardeSlots);
-        timeSlotsContainer.appendChild(tardeContainer);
-    }
-    
+        container.appendChild(slotsGrid);
+        timeSlotsContainer.appendChild(container);
+    };
+
+    // Adiciona os períodos
+    createPeriodSection('Manhã', manha);
+    createPeriodSection('Tarde', tarde);
+    createPeriodSection('Noite', noite);
+
     // Adiciona a estrutura ao container principal
     timeSlots.appendChild(timeSlotsContainer);
 }
@@ -284,7 +336,7 @@ function showTimeSlots(availableTimes) {
 window.selectTime = function(time, timeSlotElement) {
     document.querySelectorAll('.time-slot.selected').forEach(s => s.classList.remove('selected'));
     timeSlotElement.classList.add('selected');
-    selectedTime = time;
+    selectedTime = time; // Atualiza o estado global
     document.getElementById('continue-to-login').disabled = false;
 };
 
@@ -307,45 +359,60 @@ window.startReschedule = function(appointmentId, serviceId) {
         confirmText: 'Sim, remarcar',
         cancelText: 'Não, manter agendamento',
         onConfirm: () => {
-            // Define o estado de remarcação
+            // Define o estado de remarcação (global)
             reschedulingAppointmentId = appointmentId;
 
             // Pré-seleciona o serviço e vai para a tela do calendário
             selectedService = servicesData.find(service => service.id === serviceId);
             
             if (selectedService) {
-                showScreen('calendar-screen');
+                // Assumindo que remarcação usa o preço/duração originais (sem tiers)
+                 selectedTierInfo = {
+                    tierId: null,
+                    preco: selectedService.price,
+                    duracao: selectedService.duracao_minutos,
+                    valor_adiantamento: 0 // Remarcação não cobra adiantamento
+                };
+                
+                showScreen('professional-screen'); // Remarcação deve escolher profissional
             } else {
                 // Se os serviços não estiverem carregados, carrega e depois vai
                 loadServices().then(() => {
                     selectedService = servicesData.find(service => service.id === serviceId);
-                    showScreen('calendar-screen');
-                });
+                    
+                    selectedTierInfo = {
+                        tierId: null,
+                        preco: selectedService.price,
+                        duracao: selectedService.duracao_minutos,
+                        valor_adiantamento: 0
+                    };
+                    showScreen('professional-screen');
+                 });
             }
         }
     });
 };
-
 /**
  * Processa o agendamento com os dados selecionados
+ * (CHAMADO PELA TELA DE LOGIN/RESUMO)
  */
 window.processBooking = async function() {
-    if (!selectedService || !selectedDate || !selectedTime) {
+    // Verifica os dados selecionados (todos globais)
+    if (!selectedService || !selectedDate || !selectedTime || !selectedTierInfo || !selectedProfessional) {
         showToast({
-            message: 'Por favor, selecione um serviço, data e horário antes de continuar.',
+            message: 'Por favor, selecione todos os dados do agendamento.',
             type: 'warning'
         });
         return;
     }
     
-    // Verifica autenticação
+    // Verifica autenticação (global)
     if (!authState.isAuthenticated) {
         showScreen('login-screen');
         return;
     }
     
     showLoading();
-
     try {
         // --- LÓGICA DE REMARCAÇÃO ---
         if (reschedulingAppointmentId) {
@@ -353,7 +420,7 @@ window.processBooking = async function() {
             const cancelResponse = await fetch(`/${empreendedorSlug}/api/agendamentos/${reschedulingAppointmentId}/cancelar/`, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': getCsrfToken() }
-            });
+             });
             
             if (!cancelResponse.ok) {
                 const errorData = await cancelResponse.json();
@@ -371,7 +438,8 @@ window.processBooking = async function() {
             serviceId: selectedService.id,
             date: selectedDate,
             time: selectedTime,
-            empreendedorId: selectedProfessional.id // <-- ADICIONADO
+            empreendedorId: selectedProfessional.id,
+            tierManutencaoId: selectedTierInfo.tierId 
         };
 
         // --- CHAMADA FETCH PARA CRIAR AGENDAMENTO ---
@@ -383,34 +451,50 @@ window.processBooking = async function() {
             },
             body: JSON.stringify(payload)
         });
+        
+        const result = await response.json();
 
         if (!response.ok) {
-            const errorResult = await response.json();
-            throw new Error(errorResult.message || 'Falha ao criar agendamento.');
+            throw new Error(result.message || 'Falha ao criar agendamento.');
+        }
+
+        // --- LÓGICA DE DECISÃO PÓS-CRIAÇÃO ---
+        
+        if (result.status === 'success' && !result.payment_required) {
+            // CASO 1: SUCESSO DIRETO (Adiantamento R$ 0)
+            showToast({ message: 'Agendamento realizado com sucesso!', type: 'success' });
+            await showConfirmation(result.agendamento_id); // Passa o ID
+
+        } else if (result.status === 'pending_payment' && result.payment_required) {
+            // CASO 2: PAGAMENTO PENDENTE (PIX Gerado)
+            currentPendingAgendamentoId = result.agendamento_id;
+            
+            // Preenche a tela de pagamento
+            document.getElementById('payment-qr-code-img').src = `data:image/png;base64,${result.qr_code_base64}`;
+            document.getElementById('payment-qr-code-text').value = result.qr_code;
+            
+            // Mostra a tela de pagamento
+            showScreen('payment-screen');
+            
+            // Inicia o timer e o polling
+            startPaymentTimer(result.expires_at);
+            startPaymentPolling(result.agendamento_id, result.expires_at);
+
         } else {
-            const result = await response.json();
-            console.log('Agendamento bem-sucedido:', result);
-            
-            // Exibe mensagem de sucesso
-            showToast({
-                message: 'Agendamento realizado com sucesso!',
-                type: 'success'
-            });
-            
-            // Vai para a tela de confirmação
-            await showConfirmation();
+            // Caso inesperado
+            throw new Error(result.message || 'Resposta inesperada do servidor.');
         }
 
     } catch (error) {
         console.error('Falha no agendamento:', error);
-        
         showToast({
             message: `Erro: ${error.message}`,
             type: 'error',
             duration: 5000
         });
     } finally {
-        reschedulingAppointmentId = null; // Limpa o estado de remarcação
+        reschedulingAppointmentId = null;
+        // Limpa o estado de remarcação
         hideLoading();
     }
 }
@@ -418,7 +502,7 @@ window.processBooking = async function() {
 /**
  * Exibe a tela de confirmação com os detalhes do agendamento
  */
-async function showConfirmation() {
+async function showConfirmation(agendamento_id) {
     // Verifica autenticação novamente por segurança
     const authStatus = await fetch(`/${empreendedorSlug}/api/check_auth/`).then(res => res.json());
     if(!authStatus.isAuthenticated) {
@@ -429,6 +513,13 @@ async function showConfirmation() {
     // Formata a data para exibição
     const [year, month, day] = selectedDate.split('-');
     const formattedDate = `${day}/${month}/${year}`;
+
+    // Determina o nome a ser exibido
+    let nomeExibido = selectedService.name;
+    if (selectedTierInfo.tierId) {
+        const tier = selectedService.tiers_manutencao.find(t => t.id === selectedTierInfo.tierId);
+        if (tier) nomeExibido = tier.nome_tier;
+    }
     
     // Preenche os detalhes do agendamento
     document.getElementById('booking-details').innerHTML = `
@@ -442,7 +533,7 @@ async function showConfirmation() {
         </div>
         <div class="summary-item">
             <span class="label">Serviço:</span>
-            <span class="value">${selectedService.name}</span>
+            <span class="value">${nomeExibido}</span>
         </div>
         <div class="summary-item">
             <span class="label">Data:</span>
@@ -454,11 +545,21 @@ async function showConfirmation() {
         </div>
         <div class="summary-total">
             <span class="label">Total:</span>
-            <span class="value">R$ ${selectedService.price.toFixed(2).replace('.', ',')}</span>
+            <span class="value">R$ ${selectedTierInfo.preco.toFixed(2).replace('.', ',')}</span>
         </div>
+        ${selectedTierInfo.valor_adiantamento > 0 ? `
+        <div class="summary-total" style="font-size: 1rem; margin-top: 8px;">
+            <span class="label">Adiantamento Pago:</span>
+            <span class="value" style="color: var(--color-success);">R$ ${selectedTierInfo.valor_adiantamento.toFixed(2).replace('.', ',')}</span>
+        </div>
+        ` : `
+        <div class="summary-total" style="font-size: 1rem; margin-top: 8px;">
+            <span class="label">Adiantamento:</span>
+            <span class="value">R$ 0,00</span>
+        </div>
+        `}
     `;
     
-    // Vai para a tela de confirmação
     showScreen('confirmation-screen');
 }
 
@@ -466,18 +567,45 @@ async function showConfirmation() {
  * Atualiza o resumo do agendamento na tela de login
  */
 function updateBookingSummary() {
-    if (selectedService && selectedDate && selectedTime) {
+    if (selectedService && selectedDate && selectedTime && selectedTierInfo) {
         // Formata a data para exibição
         const [year, month, day] = selectedDate.split('-');
         const formattedDate = `${day}/${month}/${year}`;
+
+        let nomeExibido = selectedService.name;
+        if (selectedTierInfo.tierId) {
+            const tier = selectedService.tiers_manutencao.find(t => t.id === selectedTierInfo.tierId);
+            if (tier) nomeExibido = tier.nome_tier;
+        }
         
+        let adiantamentoHTML = '';
+        if (selectedTierInfo.valor_adiantamento > 0) {
+            const adiantamento = selectedTierInfo.valor_adiantamento.toFixed(2).replace('.', ',');
+            adiantamentoHTML = `
+                <div class="summary-total" style="font-size: 1rem; margin-top: 8px; border-top: 1px solid var(--color-border); padding-top: 8px;">
+                    <span class="label">Adiantamento (PIX):</span>
+                    <span class="value">R$ ${adiantamento}</span>
+                </div>`;
+        }
+
         // Preenche os detalhes do agendamento
-        document.getElementById('summary-service').textContent = selectedService.name;
+        document.getElementById('summary-service').textContent = nomeExibido;
         document.getElementById('summary-date').textContent = formattedDate;
         document.getElementById('summary-time').textContent = selectedTime;
-        document.getElementById('summary-duration').textContent = selectedService.duracao_formatada || `${selectedService.duracao_minutos} min`;
-        document.getElementById('summary-price').textContent = `R$ ${selectedService.price.toFixed(2).replace('.', ',')}`;
+        document.getElementById('summary-duration').textContent = formatarDuracao(selectedTierInfo.duracao);
+        document.getElementById('summary-price').textContent = `R$ ${selectedTierInfo.preco.toFixed(2).replace('.', ',')}`;
         document.getElementById('summary-professional').textContent = selectedProfessional.nome;
+
+        // Adiciona o HTML do adiantamento
+        const priceElement = document.getElementById('summary-price');
+        
+        // Remove o adiantamento antigo se houver
+        const oldAdiantamento = priceElement.parentElement.parentElement.querySelector('.summary-total-adiantamento');
+        if(oldAdiantamento) oldAdiantamento.remove();
+        
+        if(adiantamentoHTML) {
+             priceElement.parentElement.parentElement.insertAdjacentHTML('beforeend', adiantamentoHTML.replace('summary-total', 'summary-total summary-total-adiantamento'));
+        }
     }
 }
 
@@ -529,6 +657,118 @@ function getCsrfToken() {
     return cookieValue;
 }
 
+// --- INÍCIO DE NOVAS FUNÇÕES (Pagamento) ---
+
+/**
+ * Inicia o timer de contagem regressiva na tela de pagamento.
+ * @param {string} expiresAtISO - Data/hora ISO de quando o PIX expira.
+ */
+function startPaymentTimer(expiresAtISO) {
+    const timerDisplay = document.getElementById('payment-timer-display').querySelector('span');
+    if (!timerDisplay) return;
+
+    const expirationTime = new Date(expiresAtISO).getTime();
+
+    // Limpa timer anterior, se houver
+    if (paymentTimerInterval) {
+        clearInterval(paymentTimerInterval);
+    }
+
+    paymentTimerInterval = setInterval(() => {
+        const now = new Date().getTime();
+        const distance = expirationTime - now;
+
+        if (distance <= 0) {
+            clearInterval(paymentTimerInterval);
+            timerDisplay.textContent = "Expirado";
+            // O polling vai tratar o cancelamento
+        } else {
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+            timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+    }, 1000);
+}
+
+/**
+ * Inicia o polling para verificar o status do agendamento.
+ * @param {number} agendamentoId - ID do agendamento a ser verificado.
+ * @param {string} expiresAtISO - Data/hora ISO de quando o PIX expira.
+ */
+function startPaymentPolling(agendamentoId, expiresAtISO) {
+    // Limpa polling anterior, se houver
+    stopPaymentPolling();
+
+    const expirationTime = new Date(expiresAtISO).getTime();
+
+    paymentPollingInterval = setInterval(async () => {
+        const now = new Date().getTime();
+
+        // 1. Verifica se o tempo expirou
+        if (now >= expirationTime) {
+            console.log("Timer expirou. Parando polling.");
+            stopPaymentPolling();
+            showScreen('payment-failed-screen');
+            // O backend (cron job) vai limpar o agendamento
+            return;
+        }
+
+        // 2. Se ainda há tempo, verifica o status no backend
+        try {
+            const response = await fetch(`/${empreendedorSlug}/api/check-booking-status/${agendamentoId}/`);
+            if (!response.ok) {
+                 // Se o agendamento não for encontrado (404), para o polling
+                if(response.status === 404) stopPaymentPolling();
+                return; // Tenta de novo na próxima
+            }
+
+            const result = await response.json();
+
+            if (result.status === 'Confirmado') {
+                // SUCESSO!
+                console.log("Pagamento confirmado via polling!");
+                stopPaymentPolling();
+                showToast({ message: 'Pagamento recebido!', type: 'success' });
+                // (selectedService, etc. ainda estão no estado global)
+                await showConfirmation(agendamentoId);
+                
+            } else if (result.status === 'Cancelado') {
+                // FALHA (Ex: webhook recebeu 'rejected' antes do polling)
+                console.log("Agendamento cancelado via polling.");
+                stopPaymentPolling();
+                showScreen('payment-failed-screen');
+            
+            } else {
+                // Ainda 'Aguardando Pagamento', continua o polling
+                console.log("Aguardando pagamento...");
+            }
+
+        } catch (error) {
+            console.error("Erro no polling:", error);
+            // Continua tentando
+        }
+    }, 5000);
+    // Verifica a cada 5 segundos
+}
+
+/**
+ * Para todos os timers e intervals de pagamento.
+ */
+function stopPaymentPolling() {
+    if (paymentPollingInterval) {
+        clearInterval(paymentPollingInterval);
+        paymentPollingInterval = null;
+    }
+    if (paymentTimerInterval) {
+        clearInterval(paymentTimerInterval);
+        paymentTimerInterval = null;
+    }
+    currentPendingAgendamentoId = null;
+}
+
+// --- FIM DE NOVAS FUNÇÕES (Pagamento) ---
+
+
 // --- INICIALIZAÇÃO ---
 window.proceedWithBooking = function() {
     processBooking();
@@ -544,4 +784,24 @@ document.addEventListener('DOMContentLoaded', function() {
             showScreen('login-screen');
         });
     }
+
+    // --- NOVA ADIÇÃO (Botão Copiar PIX) ---
+    const copyButton = document.getElementById('btn-copy-pix');
+    if (copyButton) {
+        copyButton.addEventListener('click', () => {
+            const input = document.getElementById('payment-qr-code-text');
+            input.select(); // Seleciona o texto
+            input.setSelectionRange(0, 99999); // Para mobile
+            
+            try {
+                navigator.clipboard.writeText(input.value);
+                showToast({ message: 'Código PIX copiado!', type: 'success' });
+                copyButton.textContent = 'Copiado!';
+                setTimeout(() => { copyButton.textContent = 'Copiar'; }, 2000);
+            } catch (err) {
+                showToast({ message: 'Falha ao copiar. Copie manualmente.', type: 'error' });
+            }
+        });
+    }
+    // --- FIM DA NOVA ADIÇÃO ---
 });

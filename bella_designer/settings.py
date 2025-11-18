@@ -2,6 +2,20 @@
 
 import os
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+from django.conf import settings  # <-- 1. ADICIONE ESTA IMPORTAÇÃO
+from django.conf.urls.static import static  # <-- 2. ADICIONE ESTA IMPORTAÇÃO
+
+# Chame isso em algum lugar perto do BASE_DIR se ainda não estiver fazendo
+load_dotenv()
+
+MERCADO_PAGO_ACCESS_TOKEN = os.getenv('MERCADO_PAGO_ACCESS_TOKEN')
+
+BASE_URL = os.getenv('BASE_URL', 'https://jrtechhub.online')
+
+# Tempo em minutos que o PIX ficará ativo antes de expirar
+MINUTOS_EXPIRACAO_PIX = 5
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -13,8 +27,14 @@ SECRET_KEY = 'django-insecure-sua-chave-secreta-aqui'  # Mantenha sua chave orig
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*', 'jrtechhub.online',
+                 'www.jrtechhub.online', '127.0.0.1', 'localhost']
 
+urlpatterns = []
+
+
+CSRF_TRUSTED_ORIGINS = ['https://jrtechhub.online',
+                        'https://www.jrtechhub.online']
 
 # Application definition
 
@@ -31,6 +51,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -107,8 +128,15 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
 
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL,
+                          document_root=settings.MEDIA_ROOT)
