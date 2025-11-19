@@ -1,142 +1,3 @@
-C:\Users\SV1830\Downloads\bella_designerV45\bella_designer\gerar.py
-
-import os
-import fnmatch
-
-
-def analisar_e_escrever_arquivos(
-    ignorar_nomes_pastas=None,
-    ignorar_padroes_glob=None,
-    ignorar_caminhos_relativos=None,
-):
-    """
-    Percorre o diretório atual e suas subpastas em busca de arquivos
-    com extensões específicas (.py, .html, .css, .js) e escreve seus
-    caminhos e conteúdos em um arquivo de texto.
-
-    Permite ignorar pastas:
-      - por nome exato (ex.: {'node_modules', '.git', 'venv'})
-      - por padrão glob (ex.: {'*.venv*', 'build*'})
-      - por caminho relativo a partir da pasta raiz (ex.: {'projetos/arquivos/grandes'})
-    """
-    pasta_raiz = os.getcwd()
-
-    # Normaliza parâmetros
-    ignorar_nomes_pastas = set(ignorar_nomes_pastas or [])
-    ignorar_padroes_glob = set(ignorar_padroes_glob or [])
-    # Normaliza separadores e resolve caminhos relativos em relação à pasta raiz
-    ignorar_caminhos_relativos = {
-        os.path.normpath(os.path.join(pasta_raiz, p))
-        for p in (ignorar_caminhos_relativos or set())
-    }
-
-    extensoes_desejadas = ('.py', '.html', '.css', '.js')
-    arquivo_saida = 'conteudo_arquivos.txt'
-
-    try:
-        with open(arquivo_saida, 'w', encoding='utf-8') as saida:
-            print(f"Analisando a partir de: {pasta_raiz}")
-            print(f"Os resultados serão salvos em: {arquivo_saida}\n")
-
-            for diretorio_atual, dirnames, arquivos in os.walk(pasta_raiz):
-                # --- FILTRO DE PASTAS A SEREM IGNORADAS ---
-                # Vamos modificar dirnames in-place para evitar descer nessas pastas.
-                dirnames[:] = [
-                    d for d in dirnames
-                    if not deve_ignorar_pasta(
-                        dir_nome=d,
-                        dir_absoluto=os.path.join(diretorio_atual, d),
-                        pasta_raiz=pasta_raiz,
-                        ignorar_nomes_pastas=ignorar_nomes_pastas,
-                        ignorar_padroes_glob=ignorar_padroes_glob,
-                        ignorar_caminhos_absolutos=ignorar_caminhos_relativos
-                    )
-                ]
-
-                for nome_arquivo in arquivos:
-                    if nome_arquivo.endswith(extensoes_desejadas):
-                        caminho_completo = os.path.join(
-                            diretorio_atual, nome_arquivo)
-
-                        saida.write(f"{caminho_completo}\n\n")
-
-                        try:
-                            with open(caminho_completo, 'r', encoding='utf-8', errors='ignore') as entrada:
-                                conteudo = entrada.read()
-                                saida.write(f"{conteudo}\n")
-                        except Exception as e:
-                            saida.write(
-                                f"--- Erro ao ler o arquivo: {e} ---\n")
-
-                        saida.write(
-                            "_____________________________________\n\n")
-                        print(f"Processado: {caminho_completo}")
-
-        print(
-            f"\nAnálise concluída com sucesso! Verifique o arquivo '{arquivo_saida}'.")
-
-    except IOError as e:
-        print(f"Erro ao escrever no arquivo de saída: {e}")
-    except Exception as e:
-        print(f"Ocorreu um erro inesperado: {e}")
-
-
-def deve_ignorar_pasta(
-    dir_nome: str,
-    dir_absoluto: str,
-    pasta_raiz: str,
-    ignorar_nomes_pastas: set,
-    ignorar_padroes_glob: set,
-    ignorar_caminhos_absolutos: set,
-) -> bool:
-    """
-    Retorna True se a pasta deve ser ignorada, com base em:
-      - nome exato
-      - padrões glob
-      - caminho absoluto correspondente a caminhos relativos ignorados
-    """
-    # 1) Nome exato (case-sensitive; ajuste se quiser case-insensitive)
-    if dir_nome in ignorar_nomes_pastas:
-        return True
-
-    # 2) Padrões glob (ex.: '*.venv*', 'build*')
-    for padrao in ignorar_padroes_glob:
-        if fnmatch.fnmatch(dir_nome, padrao):
-            return True
-
-    # 3) Caminhos absolutos específicos (derivados dos caminhos relativos)
-    dir_absoluto_norm = os.path.normpath(dir_absoluto)
-
-    # Ignora se a pasta atual é exatamente uma das listadas
-    if dir_absoluto_norm in ignorar_caminhos_absolutos:
-        return True
-
-    # Ignora se a pasta atual está dentro de um caminho ignorado (subdiretório)
-    for caminho_ignorado in ignorar_caminhos_absolutos:
-        # Ex.: /raiz/projetos/arquivos/grandes é prefixo de /raiz/projetos/arquivos/grandes/imagens
-        if dir_absoluto_norm.startswith(caminho_ignorado + os.sep):
-            return True
-
-    return False
-
-
-if __name__ == '__main__':
-    # EXEMPLO DE USO: ajuste conforme sua necessidade
-    analisar_e_escrever_arquivos(
-        ignorar_nomes_pastas={
-            '__pycache__', 'migrations', '.git', 'venv', 'antigos', 'media',
-        },
-        ignorar_padroes_glob={
-            '*.venv*', 'build*', '.gitattributes', '.txt'
-        },
-        ignorar_caminhos_relativos={
-            # caminhos relativos a partir da pasta raiz
-            # 'projetos/arquivos/grandes',
-        }
-    )
-
-_____________________________________
-
 C:\Users\SV1830\Downloads\bella_designerV45\bella_designer\manage.py
 
 #!/usr/bin/env python
@@ -184,6 +45,7 @@ class NegocioAdmin(admin.ModelAdmin):
     list_display = ('nome_negocio', 'slug', 'cor_primaria')
     search_fields = ('nome_negocio', 'slug')
     prepopulated_fields = {'slug': ('nome_negocio',)}
+    readonly_fields = ('api_token',)
 
 # -----------------------------------------------------------
 # Configuração para o "Perfil do Empreendedor" (Funcionário)
@@ -230,6 +92,7 @@ class CategoriaAdmin(admin.ModelAdmin):
 # NOVA ADIÇÃO: ADMIN DE PREÇOS DE MANUTENÇÃO (para usar 'inline')
 # =================================================================
 
+
 class PrecoManutencaoInline(admin.TabularInline):
     """
     Isso permite editar os preços de manutenção DENTRO da página de 
@@ -238,12 +101,12 @@ class PrecoManutencaoInline(admin.TabularInline):
     model = PrecoManutencao
     formset = forms.models.BaseInlineFormSet  # Usado para validação
     extra = 1  # Começa com 1 campo de manutenção em branco
-    
+
     # --- NOVA ADIÇÃO ---
     # Define os campos que aparecem no inline
-    fields = ('nome_tier', 'dias_min', 'dias_max', 'preco', 'duracao_minutos', 'percentual_adiantamento')
+    fields = ('nome_tier', 'dias_min', 'dias_max', 'preco',
+              'duracao_minutos', 'percentual_adiantamento')
     # --- FIM DA ADIÇÃO ---
-
 
     def get_formset(self, request, obj=None, **kwargs):
         # Validação para garantir que os ranges não se sobreponham
@@ -285,6 +148,7 @@ class PrecoManutencaoInline(admin.TabularInline):
                         )
 
         return ValidatedFormSet
+
 
 class ServicoAdminForm(forms.ModelForm):
     class Meta:
@@ -373,12 +237,13 @@ class ServicoAdmin(admin.ModelAdmin):
     form = ServicoAdminForm
     # --- MODIFICADO ---
     list_display = ('nome', 'negocio', 'categoria', 'preco',
-                    'duracao_minutos', 'percentual_adiantamento', 'get_profissionais') # <-- ADICIONADO
+                    'duracao_minutos', 'percentual_adiantamento', 'get_profissionais')  # <-- ADICIONADO
     # Adicionado 'categoria__nome'
     search_fields = ('nome', 'negocio__nome_negocio', 'categoria__nome')
     list_filter = ('negocio', 'categoria')  # Adicionado 'categoria'
     # --- FIM DA MODIFICAÇÃO ---
-    list_editable = ('preco', 'duracao_minutos', 'percentual_adiantamento') # <-- ADICIONADO
+    list_editable = ('preco', 'duracao_minutos',
+                     'percentual_adiantamento')  # <-- ADICIONADO
     filter_horizontal = ('profissionais_que_executam',)
 
     # --- NOVA ADIÇÃO ---
@@ -391,10 +256,11 @@ class ServicoAdmin(admin.ModelAdmin):
         nomes = [p.user.get_full_name(
         ) or p.user.username for p in obj.profissionais_que_executam.all()]
         return ", ".join(nomes)
-    
+
 # -----------------------------------------------------------
 # Configuração para "Agendamento"
 # -----------------------------------------------------------
+
 
 @admin.register(Agendamento)
 class AgendamentoAdmin(admin.ModelAdmin):
@@ -406,25 +272,26 @@ class AgendamentoAdmin(admin.ModelAdmin):
         'data',
         'horario',
         'status',
-        'status_pagamento', # <-- ADICIONADO
-        'preco_final', 
-        'valor_adiantamento', # <-- ADICIONADO
+        'status_pagamento',  # <-- ADICIONADO
+        'preco_final',
+        'valor_adiantamento',  # <-- ADICIONADO
         'duracao_final'
     )
-    list_filter = ('data', 'status', 'status_pagamento', 'servico__negocio', # <-- ADICIONADO
-                   'servico__categoria')  
+    list_filter = ('data', 'status', 'status_pagamento', 'servico__negocio',  # <-- ADICIONADO
+                   'servico__categoria')
     search_fields = (
         'servico__nome',
         'cliente__user__username',
         'empreendedor_executor__user__username',
         'tier_manutencao__nome_tier',
-        'payment_id_mp' # <-- ADICIONADO
+        'payment_id_mp'  # <-- ADICIONADO
     )
 
     # --- NOVA ADIÇÃO ---
     # Campos que não devem ser editados no admin após a criação
-    readonly_fields = ('preco_final', 'duracao_final', 'valor_adiantamento', 
-                       'payment_id_mp', 'payment_qrcode', 'payment_qrcode_image', 'payment_expires') # <-- ADICIONADO
+    readonly_fields = ('preco_final', 'duracao_final', 'valor_adiantamento',
+                       # <-- ADICIONADO
+                       'payment_id_mp', 'payment_qrcode', 'payment_qrcode_image', 'payment_expires')
     # --- FIM DA ADIÇÃO ---
 
     @admin.display(description='Cliente')
@@ -434,7 +301,7 @@ class AgendamentoAdmin(admin.ModelAdmin):
     @admin.display(description='Negócio')
     def get_negocio(self, obj):
         return obj.servico.negocio
-    
+
 # -----------------------------------------------------------
 # Configuração para "Despesa"
 # -----------------------------------------------------------
@@ -472,6 +339,179 @@ class DiaBloqueadoAdmin(admin.ModelAdmin):
     list_display = ('empreendedor', 'data', 'descricao')
     list_filter = ('empreendedor__negocio', 'data')
     search_fields = ('descricao',)
+
+_____________________________________
+
+C:\Users\SV1830\Downloads\bella_designerV45\bella_designer\agendamentos\api_n8n.py
+
+# agendamentos/api_n8n.py
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+from datetime import datetime, timedelta
+from .models import Negocio, Servico, EmpreendedorProfile, HorarioTrabalho, Agendamento, DiaBloqueado
+
+
+def validar_token(func):
+    """Decorator para validar o Token do n8n"""
+    def wrapper(request, *args, **kwargs):
+        token = request.headers.get('X-Api-Token')
+        if not token:
+            return JsonResponse({'error': 'Token não fornecido'}, status=401)
+        try:
+            negocio = Negocio.objects.get(api_token=token)
+            request.negocio = negocio  # Injeta o negócio na requisição
+        except Negocio.DoesNotExist:
+            return JsonResponse({'error': 'Token inválido'}, status=403)
+        return func(request, *args, **kwargs)
+    return wrapper
+
+
+@csrf_exempt
+@validar_token
+def n8n_listar_servicos(request):
+    """
+    Retorna lista de serviços e profissionais para a IA.
+    """
+    servicos = Servico.objects.filter(negocio=request.negocio)
+
+    catalogo = []
+    for s in servicos:
+        # Formata tiers de manutenção
+        tiers = []
+        for t in s.precos_manutencao.all():
+            tiers.append(
+                f"- {t.nome_tier}: R$ {t.preco} ({t.duracao_minutos} min)")
+
+        profissionais = [p.user.get_full_name()
+                         for p in s.profissionais_que_executam.all()]
+
+        item = {
+            "id": s.id,
+            "nome": s.nome,
+            "preco_base": float(s.preco),
+            "duracao_minutos": s.duracao_minutos,
+            "descricao": s.descricao,
+            "manutencoes": tiers,
+            "profissionais": profissionais
+        }
+        catalogo.append(item)
+
+    return JsonResponse({"servicos": catalogo}, safe=False)
+
+
+@csrf_exempt
+@validar_token
+def n8n_consultar_disponibilidade(request):
+    """
+    Recebe: data (YYYY-MM-DD), servico_id (opcional, ou nome)
+    Retorna: Horários livres
+    """
+    import json
+    try:
+        # Tenta ler do corpo JSON (POST) ou Query Params (GET)
+        if request.method == 'POST':
+            data_body = json.loads(request.body)
+            data_str = data_body.get('data')
+            nome_profissional = data_body.get(
+                'profissional')  # IA manda o nome
+            # A IA pode mandar ID ou tentar buscar pelo nome, vamos simplificar exigindo ID do serviço por enquanto
+            # ou fazendo uma busca simples
+            servico_id = data_body.get('servico_id')
+        else:
+            data_str = request.GET.get('data')
+            nome_profissional = request.GET.get('profissional')
+            servico_id = request.GET.get('servico_id')
+
+        if not data_str:
+            return JsonResponse({'error': 'Data é obrigatória (YYYY-MM-DD)'}, status=400)
+
+        data_obj = datetime.strptime(data_str, '%Y-%m-%d').date()
+
+        # Busca Profissional (por nome aproximado ou primeiro disponível)
+        if nome_profissional:
+            profissional = EmpreendedorProfile.objects.filter(
+                negocio=request.negocio,
+                user__first_name__icontains=nome_profissional
+            ).first()
+        else:
+            profissional = EmpreendedorProfile.objects.filter(
+                negocio=request.negocio).first()
+
+        if not profissional:
+            return JsonResponse({'error': 'Profissional não encontrado'}, status=404)
+
+        # Define duração (padrão 60 min se não informado serviço)
+        duracao = timedelta(minutes=60)
+        if servico_id:
+            try:
+                servico = Servico.objects.get(
+                    id=servico_id, negocio=request.negocio)
+                duracao = timedelta(minutes=servico.duracao_minutos)
+            except Servico.DoesNotExist:
+                pass
+
+        # --- LÓGICA SIMPLIFICADA DE HORÁRIOS (Cópia leve da logica principal) ---
+        dia_semana = data_obj.weekday()
+        blocos = HorarioTrabalho.objects.filter(
+            empreendedor=profissional, dia_da_semana=dia_semana
+        ).order_by('hora_inicio')
+
+        # Verifica bloqueios
+        if DiaBloqueado.objects.filter(empreendedor=profissional, data=data_obj).exists():
+            return JsonResponse({'msg': 'Profissional não atende nesta data (Dia Bloqueado).', 'horarios': []})
+
+        # Agendamentos existentes
+        agendamentos = Agendamento.objects.filter(
+            empreendedor_executor=profissional,
+            data=data_obj,
+            status__in=['Confirmado', 'Pendente']
+        )
+
+        blocos_ocupados = []
+        for ag in agendamentos:
+            inicio = datetime.combine(data_obj, ag.horario)
+            inicio = timezone.make_aware(inicio)
+            fim = inicio + timedelta(minutes=ag.duracao_final or 60)
+            blocos_ocupados.append((inicio, fim))
+
+        horarios_livres = []
+        agora = timezone.now()
+
+        for bloco in blocos:
+            atual = datetime.combine(data_obj, bloco.hora_inicio)
+            fim_bloco = datetime.combine(data_obj, bloco.hora_fim)
+            atual = timezone.make_aware(atual)
+            fim_bloco = timezone.make_aware(fim_bloco)
+
+            while atual + duracao <= fim_bloco:
+                # Verifica passado
+                if atual < agora:
+                    atual += timedelta(minutes=30)
+                    continue
+
+                # Verifica conflito
+                fim_slot = atual + duracao
+                conflito = False
+                for occ_ini, occ_fim in blocos_ocupados:
+                    if max(atual, occ_ini) < min(fim_slot, occ_fim):
+                        conflito = True
+                        break
+
+                if not conflito:
+                    horarios_livres.append(atual.strftime('%H:%M'))
+
+                atual += timedelta(minutes=30)
+
+        return JsonResponse({
+            'data': data_str,
+            'profissional': profissional.user.get_full_name(),
+            'horarios_disponiveis': horarios_livres
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 _____________________________________
 
@@ -1148,6 +1188,8 @@ C:\Users\SV1830\Downloads\bella_designerV45\bella_designer\agendamentos\urls.py
 from django.urls import path
 from . import views
 
+from . import api_n8n
+
 # O 'app_name' ajuda o Django a diferenciar as URLs se você tiver mais apps
 app_name = 'agendamentos'
 
@@ -1191,6 +1233,12 @@ urlpatterns = [
     path('api/check-booking-status/<int:agendamento_id>/',
          views.check_booking_status, name='api_check_booking_status'),
     # --- FIM DA NOVA ADIÇÃO ---
+
+
+    path('api/n8n/servicos/', api_n8n.n8n_listar_servicos,
+         name='n8n_listar_servicos'),
+    path('api/n8n/disponibilidade/', api_n8n.n8n_consultar_disponibilidade,
+         name='n8n_consultar_disponibilidade'),
 
     # Rotas de Login Admin (não precisam de slug, pois são globais)
     # Elas serão movidas para o urls.py principal

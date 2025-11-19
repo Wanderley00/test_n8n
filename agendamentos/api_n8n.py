@@ -24,7 +24,7 @@ def validar_token(func):
 
 @csrf_exempt
 @validar_token
-def n8n_listar_servicos(request):
+def n8n_listar_servicos(request, empreendedor_slug=None):
     """
     Retorna lista de serviços e profissionais para a IA.
     """
@@ -57,7 +57,7 @@ def n8n_listar_servicos(request):
 
 @csrf_exempt
 @validar_token
-def n8n_consultar_disponibilidade(request):
+def n8n_consultar_disponibilidade(request, empreendedor_slug=None):
     """
     Recebe: data (YYYY-MM-DD), servico_id (opcional, ou nome)
     Retorna: Horários livres
