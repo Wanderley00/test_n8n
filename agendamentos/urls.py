@@ -55,6 +55,11 @@ urlpatterns = [
     path('api/n8n/disponibilidade/', api_n8n.n8n_consultar_disponibilidade,
          name='n8n_consultar_disponibilidade'),
 
+    path('api/n8n/cliente/', api_n8n.n8n_identificar_cliente,
+         name='n8n_identificar_cliente'),
+    path('api/n8n/agendar/', api_n8n.n8n_criar_agendamento,
+         name='n8n_criar_agendamento'),
+
     # Rotas de Login Admin (não precisam de slug, pois são globais)
     # Elas serão movidas para o urls.py principal
 ]

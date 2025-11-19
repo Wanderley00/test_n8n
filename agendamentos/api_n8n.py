@@ -4,7 +4,14 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from datetime import datetime, timedelta
-from .models import Negocio, Servico, EmpreendedorProfile, HorarioTrabalho, Agendamento, DiaBloqueado
+from django.db import transaction
+from django.contrib.auth.models import User
+from django.utils.crypto import get_random_string
+import json
+import re
+
+from .models import Negocio, Servico, EmpreendedorProfile, HorarioTrabalho, Agendamento, DiaBloqueado, Cliente, PrecoManutencao
+from .mercadopago_service import MercadoPagoService  # <-- Importação Importante
 
 
 def validar_token(func):
@@ -15,7 +22,7 @@ def validar_token(func):
             return JsonResponse({'error': 'Token não fornecido'}, status=401)
         try:
             negocio = Negocio.objects.get(api_token=token)
-            request.negocio = negocio  # Injeta o negócio na requisição
+            request.negocio = negocio
         except Negocio.DoesNotExist:
             return JsonResponse({'error': 'Token inválido'}, status=403)
         return func(request, *args, **kwargs)
@@ -162,6 +169,173 @@ def n8n_consultar_disponibilidade(request, empreendedor_slug=None):
             'data': data_str,
             'profissional': profissional.user.get_full_name(),
             'horarios_disponiveis': horarios_livres
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+# ==============================================================================
+# NOVA FUNÇÃO 1: Identificar ou Criar Cliente Automaticamente
+# ==============================================================================
+@csrf_exempt
+@validar_token
+@transaction.atomic
+def n8n_identificar_cliente(request, empreendedor_slug=None):
+    """
+    Recebe: telefone (remoteJid do WhatsApp), nome (pushName)
+    Retorna: { "cliente_id": 123, "nome": "Fulano", "novo_cadastro": true/false }
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método inválido'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        # Ex: 5511999998888@s.whatsapp.net
+        telefone_bruto = data.get('telefone')
+        nome_whatsapp = data.get('nome', 'Cliente WhatsApp')
+
+        if not telefone_bruto:
+            return JsonResponse({'error': 'Telefone obrigatório'}, status=400)
+
+        # Limpa o telefone (remove @s.whatsapp.net e caracteres não numéricos)
+        telefone_limpo = re.sub(r'\D', '', telefone_bruto.split('@')[0])
+
+        # 1. Tenta buscar cliente existente neste negócio
+        cliente = Cliente.objects.filter(
+            negocio=request.negocio,
+            telefone=telefone_limpo
+        ).first()
+
+        if cliente:
+            return JsonResponse({
+                "cliente_id": cliente.id,
+                "nome": cliente.user.get_full_name() or cliente.user.username,
+                "novo_cadastro": False
+            })
+
+        # 2. Se não existe, cria um novo
+        # Verifica se já existe User com esse telefone (username)
+        user = User.objects.filter(username=telefone_limpo).first()
+
+        if not user:
+            user = User.objects.create_user(
+                username=telefone_limpo,
+                password=get_random_string(12),
+                first_name=nome_whatsapp
+            )
+
+        # Cria o perfil de Cliente vinculado ao negócio
+        cliente = Cliente.objects.create(
+            user=user,
+            negocio=request.negocio,
+            telefone=telefone_limpo,
+            data_nascimento=None  # Opcional neste fluxo rápido
+        )
+
+        return JsonResponse({
+            "cliente_id": cliente.id,
+            "nome": nome_whatsapp,
+            "novo_cadastro": True
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+# ==============================================================================
+# NOVA FUNÇÃO 2: Realizar Agendamento (Com PIX)
+# ==============================================================================
+@csrf_exempt
+@validar_token
+@transaction.atomic
+def n8n_criar_agendamento(request, empreendedor_slug=None):
+    """
+    Recebe: cliente_id, servico_id, data (YYYY-MM-DD), horario (HH:MM)
+    Retorna: Confirmação e Código PIX (se necessário)
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método inválido'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+
+        # Validações básicas
+        if not all(k in data for k in ['cliente_id', 'servico_id', 'data', 'horario']):
+            return JsonResponse({'error': 'Faltam dados obrigatórios (cliente_id, servico_id, data, horario)'}, status=400)
+
+        cliente = Cliente.objects.get(
+            id=data['cliente_id'], negocio=request.negocio)
+
+        # Lógica para identificar Serviço ou Tier
+        servico_id_raw = str(data['servico_id'])
+        servico = None
+        tier = None
+
+        # Suporta ID puro (ex: 5) ou string (ex: "service_5", "tier_2")
+        if "tier_" in servico_id_raw:
+            tid = int(servico_id_raw.split('_')[1])
+            tier = PrecoManutencao.objects.get(id=tid)
+            servico = tier.servico_pai
+        elif "service_" in servico_id_raw:
+            sid = int(servico_id_raw.split('_')[1])
+            servico = Servico.objects.get(id=sid, negocio=request.negocio)
+        else:
+            # Tenta achar como ID de serviço direto
+            servico = Servico.objects.get(
+                id=int(servico_id_raw), negocio=request.negocio)
+
+        # Escolhe profissional (simples: pega o primeiro disponível ou um específico se a IA mandar)
+        # Idealmente a IA mandaria o ID do profissional, mas vamos simplificar pegando o primeiro que faz o serviço
+        profissional = servico.profissionais_que_executam.first()
+        if not profissional:
+            return JsonResponse({'error': 'Nenhum profissional disponível para este serviço.'}, status=400)
+
+        # Cria o agendamento
+        ag = Agendamento(
+            cliente=cliente,
+            servico=servico,
+            tier_manutencao=tier,
+            empreendedor_executor=profissional,
+            data=data['data'],
+            horario=data['horario'],
+            status='Pendente'
+        )
+        ag.save()  # Calcula valores
+
+        # Lógica de Pagamento (Igual ao views.py)
+        pix_copia_cola = None
+
+        if request.negocio.pagamento_online_habilitado and ag.valor_adiantamento > 0:
+            ag.status_pagamento = 'Aguardando Pagamento'
+            ag.save()
+
+            # Gera o PIX
+            mp = MercadoPagoService()
+            payment_data = mp.criar_pagamento_pix(ag)
+
+            if payment_data:
+                ag.payment_id_mp = payment_data["payment_id"]
+                ag.payment_qrcode = payment_data["qr_code"]  # O Copia e Cola
+                ag.payment_qrcode_image = payment_data["qr_code_base64"]
+                ag.payment_expires = payment_data["expires_at"]
+                ag.save()
+                pix_copia_cola = payment_data["qr_code"]
+        else:
+            ag.status_pagamento = 'Pendente'  # Paga no local
+            ag.save()
+
+        # Formata resposta para a IA
+        msg_sucesso = f"Agendamento realizado para {ag.data.strftime('%d/%m')} às {ag.horario.strftime('%H:%M')}!"
+        if pix_copia_cola:
+            msg_sucesso += f" É necessário um adiantamento de R$ {ag.valor_adiantamento:.2f}."
+
+        return JsonResponse({
+            "status": "success",
+            "mensagem": msg_sucesso,
+            "agendamento_id": ag.id,
+            "pix_copia_cola": pix_copia_cola,  # Se for null, não tem pagamento
+            "valor_adiantamento": float(ag.valor_adiantamento)
         })
 
     except Exception as e:
