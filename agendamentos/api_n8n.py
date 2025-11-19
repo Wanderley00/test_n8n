@@ -251,7 +251,7 @@ def n8n_identificar_cliente(request, empreendedor_slug=None):
 @transaction.atomic
 def n8n_criar_agendamento(request, empreendedor_slug=None):
     """
-    Recebe: cliente_id, servico_id, data (YYYY-MM-DD), horario (HH:MM)
+    Recebe: cliente_id (pode ser ID ou Telefone), servico_id, data, horario
     Retorna: Confirmação e Código PIX (se necessário)
     """
     if request.method != 'POST':
@@ -260,19 +260,38 @@ def n8n_criar_agendamento(request, empreendedor_slug=None):
     try:
         data = json.loads(request.body)
 
-        # Validações básicas
+        # Validações básicas de campos
         if not all(k in data for k in ['cliente_id', 'servico_id', 'data', 'horario']):
-            return JsonResponse({'error': 'Faltam dados obrigatórios (cliente_id, servico_id, data, horario)'}, status=400)
+            return JsonResponse({'error': 'Faltam dados obrigatórios'}, status=400)
 
-        cliente = Cliente.objects.get(
-            id=data['cliente_id'], negocio=request.negocio)
+        # --- CORREÇÃO DE ROBUSTEZ PARA O CLIENTE ---
+        raw_cliente_input = str(data['cliente_id'])  # Pega o que a IA mandou
+        cliente = None
 
-        # Lógica para identificar Serviço ou Tier
+        # Cenário A: A IA mandou o ID numérico (ex: "45")
+        if raw_cliente_input.isdigit():
+            try:
+                cliente = Cliente.objects.get(
+                    id=int(raw_cliente_input), negocio=request.negocio)
+            except Cliente.DoesNotExist:
+                pass  # Tenta buscar por telefone se falhar
+
+        # Cenário B: A IA mandou o Telefone ou falhou no ID (ex: "5511...@s.whatsapp.net")
+        if not cliente:
+            # Limpa o input para deixar apenas números
+            telefone_limpo = re.sub(r'\D', '', raw_cliente_input.split('@')[0])
+            cliente = Cliente.objects.filter(
+                negocio=request.negocio, telefone=telefone_limpo).first()
+
+        if not cliente:
+            return JsonResponse({'error': f'Cliente não encontrado (Input: {raw_cliente_input})'}, status=404)
+        # --- FIM DA CORREÇÃO ---
+
+        # Lógica para identificar Serviço ou Tier (Mantida igual)
         servico_id_raw = str(data['servico_id'])
         servico = None
         tier = None
 
-        # Suporta ID puro (ex: 5) ou string (ex: "service_5", "tier_2")
         if "tier_" in servico_id_raw:
             tid = int(servico_id_raw.split('_')[1])
             tier = PrecoManutencao.objects.get(id=tid)
@@ -282,11 +301,12 @@ def n8n_criar_agendamento(request, empreendedor_slug=None):
             servico = Servico.objects.get(id=sid, negocio=request.negocio)
         else:
             # Tenta achar como ID de serviço direto
+            # Remove prefixos caso a IA mande 'id: 5' ou algo assim
+            clean_id = re.sub(r'\D', '', servico_id_raw)
             servico = Servico.objects.get(
-                id=int(servico_id_raw), negocio=request.negocio)
+                id=int(clean_id), negocio=request.negocio)
 
-        # Escolhe profissional (simples: pega o primeiro disponível ou um específico se a IA mandar)
-        # Idealmente a IA mandaria o ID do profissional, mas vamos simplificar pegando o primeiro que faz o serviço
+        # Escolhe profissional
         profissional = servico.profissionais_que_executam.first()
         if not profissional:
             return JsonResponse({'error': 'Nenhum profissional disponível para este serviço.'}, status=400)
@@ -310,33 +330,40 @@ def n8n_criar_agendamento(request, empreendedor_slug=None):
             ag.status_pagamento = 'Aguardando Pagamento'
             ag.save()
 
-            # Gera o PIX
-            mp = MercadoPagoService()
-            payment_data = mp.criar_pagamento_pix(ag)
+            try:
+                mp = MercadoPagoService()
+                payment_data = mp.criar_pagamento_pix(ag)
 
-            if payment_data:
-                ag.payment_id_mp = payment_data["payment_id"]
-                ag.payment_qrcode = payment_data["qr_code"]  # O Copia e Cola
-                ag.payment_qrcode_image = payment_data["qr_code_base64"]
-                ag.payment_expires = payment_data["expires_at"]
-                ag.save()
-                pix_copia_cola = payment_data["qr_code"]
+                if payment_data:
+                    ag.payment_id_mp = payment_data["payment_id"]
+                    ag.payment_qrcode = payment_data["qr_code"]
+                    ag.payment_qrcode_image = payment_data["qr_code_base64"]
+                    ag.payment_expires = payment_data["expires_at"]
+                    ag.save()
+                    pix_copia_cola = payment_data["qr_code"]
+            except Exception as e:
+                # Se falhar o MP, mantém o agendamento mas avisa no log
+                print(f"Erro ao gerar PIX: {e}")
+
         else:
-            ag.status_pagamento = 'Pendente'  # Paga no local
+            ag.status_pagamento = 'Pendente'
             ag.save()
 
         # Formata resposta para a IA
         msg_sucesso = f"Agendamento realizado para {ag.data.strftime('%d/%m')} às {ag.horario.strftime('%H:%M')}!"
-        if pix_copia_cola:
-            msg_sucesso += f" É necessário um adiantamento de R$ {ag.valor_adiantamento:.2f}."
 
-        return JsonResponse({
+        # Retorno robusto
+        response_data = {
             "status": "success",
             "mensagem": msg_sucesso,
             "agendamento_id": ag.id,
-            "pix_copia_cola": pix_copia_cola,  # Se for null, não tem pagamento
             "valor_adiantamento": float(ag.valor_adiantamento)
-        })
+        }
+
+        if pix_copia_cola:
+            response_data["pix_copia_cola"] = pix_copia_cola
+
+        return JsonResponse(response_data)
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
