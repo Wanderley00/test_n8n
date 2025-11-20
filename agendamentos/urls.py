@@ -50,7 +50,6 @@ urlpatterns = [
     # --- FIM DA NOVA ADIÇÃO ---
 
 
-    # URLs para n8n
     path('api/n8n/servicos/', api_n8n.n8n_listar_servicos,
          name='n8n_listar_servicos'),
     path('api/n8n/disponibilidade/', api_n8n.n8n_consultar_disponibilidade,
