@@ -260,38 +260,30 @@ def n8n_criar_agendamento(request, empreendedor_slug=None):
     try:
         data = json.loads(request.body)
 
-        # Validações básicas de campos
+        # Validações básicas
         if not all(k in data for k in ['cliente_id', 'servico_id', 'data', 'horario']):
             return JsonResponse({'error': 'Faltam dados obrigatórios'}, status=400)
 
-        # --- CORREÇÃO DE ROBUSTEZ PARA O CLIENTE ---
-        raw_cliente_input = str(data['cliente_id'])  # Pega o que a IA mandou
+        # --- Lógica do Cliente (Mantida) ---
+        raw_cliente_input = str(data['cliente_id'])
         cliente = None
-
-        # Cenário A: A IA mandou o ID numérico (ex: "45")
         if raw_cliente_input.isdigit():
             try:
                 cliente = Cliente.objects.get(
                     id=int(raw_cliente_input), negocio=request.negocio)
             except Cliente.DoesNotExist:
-                pass  # Tenta buscar por telefone se falhar
-
-        # Cenário B: A IA mandou o Telefone ou falhou no ID (ex: "5511...@s.whatsapp.net")
+                pass
         if not cliente:
-            # Limpa o input para deixar apenas números
             telefone_limpo = re.sub(r'\D', '', raw_cliente_input.split('@')[0])
             cliente = Cliente.objects.filter(
                 negocio=request.negocio, telefone=telefone_limpo).first()
-
         if not cliente:
             return JsonResponse({'error': f'Cliente não encontrado (Input: {raw_cliente_input})'}, status=404)
-        # --- FIM DA CORREÇÃO ---
 
-        # Lógica para identificar Serviço ou Tier (Mantida igual)
+        # --- Lógica do Serviço (Mantida) ---
         servico_id_raw = str(data['servico_id'])
         servico = None
         tier = None
-
         if "tier_" in servico_id_raw:
             tid = int(servico_id_raw.split('_')[1])
             tier = PrecoManutencao.objects.get(id=tid)
@@ -300,40 +292,48 @@ def n8n_criar_agendamento(request, empreendedor_slug=None):
             sid = int(servico_id_raw.split('_')[1])
             servico = Servico.objects.get(id=sid, negocio=request.negocio)
         else:
-            # Tenta achar como ID de serviço direto
-            # Remove prefixos caso a IA mande 'id: 5' ou algo assim
             clean_id = re.sub(r'\D', '', servico_id_raw)
             servico = Servico.objects.get(
                 id=int(clean_id), negocio=request.negocio)
 
-        # Escolhe profissional
         profissional = servico.profissionais_que_executam.first()
         if not profissional:
             return JsonResponse({'error': 'Nenhum profissional disponível para este serviço.'}, status=400)
 
-        # Cria o agendamento
+        # --- CORREÇÃO AQUI: CONVERTER STRINGS PARA OBJETOS ---
+        try:
+            data_obj = datetime.strptime(data['data'], '%Y-%m-%d').date()
+            horario_obj = datetime.strptime(data['horario'], '%H:%M').time()
+        except ValueError:
+            # Tenta corrigir formatos comuns (ex: horario HH:MM:SS ou data errada)
+            if len(data['horario']) > 5:
+                horario_obj = datetime.strptime(
+                    data['horario'][:5], '%H:%M').time()
+            else:
+                raise ValueError(
+                    "Formato de data (YYYY-MM-DD) ou horário (HH:MM) inválido.")
+        # --- FIM DA CORREÇÃO ---
+
+        # Cria o agendamento (Usando os objetos convertidos)
         ag = Agendamento(
             cliente=cliente,
             servico=servico,
             tier_manutencao=tier,
             empreendedor_executor=profissional,
-            data=data['data'],
-            horario=data['horario'],
+            data=data_obj,      # <-- Usa o objeto data
+            horario=horario_obj,  # <-- Usa o objeto horario
             status='Pendente'
         )
-        ag.save()  # Calcula valores
+        ag.save()
 
-        # Lógica de Pagamento (Igual ao views.py)
+        # Lógica de Pagamento
         pix_copia_cola = None
-
         if request.negocio.pagamento_online_habilitado and ag.valor_adiantamento > 0:
             ag.status_pagamento = 'Aguardando Pagamento'
             ag.save()
-
             try:
                 mp = MercadoPagoService()
                 payment_data = mp.criar_pagamento_pix(ag)
-
                 if payment_data:
                     ag.payment_id_mp = payment_data["payment_id"]
                     ag.payment_qrcode = payment_data["qr_code"]
@@ -342,17 +342,14 @@ def n8n_criar_agendamento(request, empreendedor_slug=None):
                     ag.save()
                     pix_copia_cola = payment_data["qr_code"]
             except Exception as e:
-                # Se falhar o MP, mantém o agendamento mas avisa no log
                 print(f"Erro ao gerar PIX: {e}")
-
         else:
             ag.status_pagamento = 'Pendente'
             ag.save()
 
-        # Formata resposta para a IA
+        # Formata resposta (Agora funciona porque ag.data é um objeto Date)
         msg_sucesso = f"Agendamento realizado para {ag.data.strftime('%d/%m')} às {ag.horario.strftime('%H:%M')}!"
 
-        # Retorno robusto
         response_data = {
             "status": "success",
             "mensagem": msg_sucesso,
