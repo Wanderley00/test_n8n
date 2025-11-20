@@ -50,13 +50,15 @@ urlpatterns = [
     # --- FIM DA NOVA ADIÇÃO ---
 
 
+    # URLs para n8n
     path('api/n8n/servicos/', api_n8n.n8n_listar_servicos,
          name='n8n_listar_servicos'),
     path('api/n8n/disponibilidade/', api_n8n.n8n_consultar_disponibilidade,
          name='n8n_consultar_disponibilidade'),
-
     path('api/n8n/cliente/', api_n8n.n8n_identificar_cliente,
          name='n8n_identificar_cliente'),
+    path('api/n8n/atualizar-cliente/', api_n8n.n8n_atualizar_cliente,
+         name='n8n_atualizar_cliente'),
     path('api/n8n/agendar/', api_n8n.n8n_criar_agendamento,
          name='n8n_criar_agendamento'),
 
